@@ -1,0 +1,41 @@
+<footer id="contacto" class="footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <img src="/brand/habitat-logo.png" alt="Hábitat - Fluir en Movimiento" />
+    </div>
+    <div>
+      <h3>Contacto</h3>
+      <p>WhatsApp · <a href="https://wa.me/" rel="noreferrer">11 1234 5678</a></p>
+      <p><a href="mailto:hola@habitatpilates.com">hola@habitatpilates.com</a></p>
+      <p>Buenos Aires, Argentina</p>
+    </div>
+    <div>
+      <h3>Navegación</h3>
+      <a href="#clases">Clases</a>
+      <a href="#estudio">El estudio</a>
+      <a href="#equipo">Sobre mí</a>
+      <a href="#contacto">Contacto</a>
+    </div>
+    <div>
+      <h3>Seguinos</h3>
+      <p>Instagram · @habitatpilates</p>
+      <p>WhatsApp · 11 1234 5678</p>
+    </div>
+    <blockquote>Fluir es elegirte.<br />Movimiento es libertad.</blockquote>
+  </div>
+</footer>
+<style>
+  .footer { position: relative; overflow: hidden; padding: 46px 0; border-top: 1px solid var(--habitat-border); background: #fff7ec; }
+  .footer::after {
+    content: ""; position: absolute; width: 360px; height: 210px; right: -80px; bottom: -95px;
+    background: var(--habitat-yellow); border-radius: 54% 46% 31% 69% / 41% 50% 50% 59%; opacity: .75;
+  }
+  .footer-grid { display: grid; grid-template-columns: 1.25fr 1fr .8fr 1fr 1.2fr; gap: 38px; align-items: start; position: relative; z-index: 1; }
+  .footer-brand img { width: 150px; height: 95px; object-fit: contain; }
+  h3 { margin: 0 0 12px; font-size: .95rem; }
+  p, a { font-size: .88rem; margin: 6px 0; color: var(--habitat-muted); }
+  div > a { display: block; }
+  blockquote { font-family: var(--font-display); font-style: italic; font-size: 1.25rem; margin: 12px 0 0; }
+  @media (max-width: 900px) { .footer-grid { grid-template-columns: repeat(2, 1fr); } blockquote { grid-column: 1 / -1; } }
+  @media (max-width: 520px) { .footer-grid { grid-template-columns: 1fr; } blockquote { grid-column: auto; } }
+</style>

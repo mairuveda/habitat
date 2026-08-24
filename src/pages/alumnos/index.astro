@@ -1,0 +1,38 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import LoginForm from "@/components/auth/LoginForm";
+---
+<BaseLayout title="Área alumnos · Hábitat" bodyClass="auth-page">
+  <main class="auth-shell">
+    <section class="brand-panel">
+      <a href="/"><img src="/brand/habitat-logo.png" alt="Hábitat - Fluir en Movimiento" /></a>
+      <p>Tu práctica también viaja con vos.</p>
+    </section>
+    <section class="login-card">
+      <a class="back" href="/">← Volver al sitio</a>
+      <h1>Iniciar sesión</h1>
+      <p>Accedé a tu espacio de bienestar.</p>
+      <LoginForm client:load />
+      <div class="contact">¿No tenés acceso? <a href="/#contacto">Contactanos</a></div>
+    </section>
+  </main>
+</BaseLayout>
+<style is:global>
+  .auth-page { background: radial-gradient(circle at 10% 10%, #fcd37e 0 13%, transparent 14%), linear-gradient(135deg, #fffaf2, #ffedd2); }
+  .auth-shell { min-height: 100vh; display: grid; grid-template-columns: 1.1fr .9fr; align-items: center; width: min(1050px, calc(100% - 36px)); margin: auto; gap: 80px; }
+  .brand-panel img { width: min(430px, 80%); }
+  .brand-panel p { font-family: var(--font-display); font-size: 1.6rem; margin-left: 70px; }
+  .login-card { background: rgb(255 253 249 / .96); border: 1px solid var(--habitat-border); border-radius: 28px; padding: 40px; box-shadow: var(--habitat-shadow); }
+  .back { font-size: .85rem; color: var(--habitat-muted); }
+  .login-card h1 { margin: 24px 0 4px; font-size: 1.8rem; }
+  .login-card > p { color: var(--habitat-muted); margin-top: 0; }
+  .login-form { display: grid; gap: 15px; margin-top: 26px; }
+  .login-form label { display: grid; gap: 7px; font-size: .83rem; font-weight: 700; }
+  .login-form input { width: 100%; min-height: 46px; border: 1px solid var(--habitat-border); border-radius: 9px; padding: 0 13px; background: #fff; }
+  .login-primary { border: 0; border-radius: 9px; min-height: 46px; background: var(--habitat-chocolate); color: #fff; font-weight: 700; }
+  .login-link { border: 1px solid var(--habitat-border); min-height: 44px; border-radius: 9px; background: #fff; color: var(--habitat-chocolate); }
+  .demo-note, .login-message { font-size: .78rem; color: var(--habitat-muted); margin: 0; }
+  .contact { margin-top: 20px; font-size: .82rem; text-align: center; color: var(--habitat-muted); }
+  .contact a { color: var(--habitat-orange-strong); font-weight: 700; }
+  @media (max-width: 760px) { .auth-shell { grid-template-columns: 1fr; gap: 18px; padding: 40px 0; } .brand-panel { text-align: center; } .brand-panel img { width: 220px; margin: auto; } .brand-panel p { margin: 0; font-size: 1.2rem; } }
+</style>

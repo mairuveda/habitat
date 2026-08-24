@@ -1,0 +1,87 @@
+---
+const links = [
+  ["Inicio", "/#inicio"],
+  ["Clases", "/#clases"],
+  ["El estudio", "/#estudio"],
+  ["Sobre mí", "/#equipo"],
+  ["Testimonios", "/#testimonios"],
+  ["Contacto", "/#contacto"]
+];
+---
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="/" aria-label="Hábitat Pilates, inicio">
+      <img src="/brand/habitat-logo.png" alt="Hábitat - Fluir en Movimiento" />
+    </a>
+    <nav aria-label="Navegación principal">
+      {links.map(([label, href]) => <a href={href}>{label}</a>)}
+    </nav>
+    <div class="actions">
+      <a class="btn btn-primary compact" href="#contacto">Reservar clase</a>
+      <a class="btn btn-secondary compact" href="/alumnos">Área alumnos</a>
+    </div>
+    <button class="menu" type="button" aria-label="Abrir menú" data-menu-button>☰</button>
+  </div>
+  <div class="mobile-nav" data-mobile-nav hidden>
+    {links.map(([label, href]) => <a href={href}>{label}</a>)}
+    <a href="/alumnos">Área alumnos</a>
+  </div>
+</header>
+
+<script>
+  const button = document.querySelector("[data-menu-button]");
+  const nav = document.querySelector("[data-mobile-nav]");
+  button?.addEventListener("click", () => {
+    if (!(nav instanceof HTMLElement)) return;
+    nav.hidden = !nav.hidden;
+  });
+</script>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: rgb(255 250 242 / 0.94);
+    border-bottom: 1px solid rgb(234 217 200 / 0.8);
+    backdrop-filter: blur(14px);
+  }
+  .header-inner {
+    height: 88px;
+    display: grid;
+    grid-template-columns: 180px 1fr auto;
+    align-items: center;
+    gap: 24px;
+  }
+  .brand img { width: 150px; height: 72px; object-fit: contain; object-position: left center; }
+  nav { display: flex; justify-content: center; gap: clamp(20px, 3vw, 40px); }
+  nav a { font-size: .9rem; position: relative; padding: 34px 0 28px; }
+  nav a::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 100%;
+    bottom: 20px;
+    height: 2px;
+    background: var(--habitat-orange);
+    transition: right 160ms ease;
+  }
+  nav a:hover::after { right: 0; }
+  .actions { display: flex; gap: 12px; }
+  .compact { min-height: 42px; padding-inline: 17px; font-size: .84rem; }
+  .menu { display: none; background: none; border: 0; color: var(--habitat-chocolate); font-size: 1.6rem; }
+  .mobile-nav { padding: 10px 22px 24px; border-top: 1px solid var(--habitat-border); }
+  .mobile-nav a { display: block; padding: 11px 0; }
+  @media (max-width: 1050px) {
+    .header-inner { grid-template-columns: 150px 1fr auto; }
+    nav { display: none; }
+    .actions .btn-primary { display: none; }
+    .menu { display: block; }
+  }
+  @media (max-width: 620px) {
+    .header-inner { height: 74px; grid-template-columns: 125px 1fr auto; }
+    .brand img { width: 120px; height: 60px; }
+    .actions { justify-content: end; }
+    .actions .btn-secondary { display: none; }
+  }
+</style>

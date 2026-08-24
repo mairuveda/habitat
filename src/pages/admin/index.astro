@@ -1,0 +1,57 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import AdminDashboard from "@/components/admin/AdminDashboard";
+const menu = ["Dashboard", "Clases", "Estudiantes", "Grupos", "Asignaciones", "Mensajes", "Ajustes"];
+---
+<BaseLayout title="Administración · Hábitat">
+  <div class="admin-shell">
+    <aside>
+      <a href="/" class="brand"><img src="/brand/habitat-logo.png" alt="Hábitat" /></a>
+      <nav>{menu.map((item, i) => <a class={i === 0 ? "active" : ""} href="#">{item}</a>)}</nav>
+      <a class="logout" href="/">Cerrar sesión</a>
+    </aside>
+    <AdminDashboard client:load />
+  </div>
+</BaseLayout>
+<style is:global>
+  .admin-shell { min-height: 100vh; display: grid; grid-template-columns: 210px 1fr; background: #fffaf2; }
+  .admin-shell aside { background: linear-gradient(180deg, #4c2b1d, #321b13); padding: 20px 14px; color: #fff; display: flex; flex-direction: column; }
+  .admin-shell .brand img { width: 145px; height: 90px; object-fit: contain; filter: brightness(1.5); margin: auto; }
+  .admin-shell nav { display: grid; gap: 5px; margin-top: 10px; }
+  .admin-shell nav a { padding: 11px 14px; border-radius: 8px; color: #f3dccd; font-size: .86rem; }
+  .admin-shell nav a.active { background: var(--habitat-orange-strong); color: #fff; }
+  .admin-shell .logout { margin-top: auto; padding: 14px; color: #f3dccd; }
+  .admin-main { padding: 28px 30px 45px; overflow: hidden; }
+  .admin-title { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+  .admin-title h1 { margin: 0; font-size: 1.7rem; }
+  .admin-title p { margin: 2px 0 0; color: var(--habitat-muted); font-size: .9rem; }
+  .admin-title > button { border: 0; border-radius: 9px; background: var(--habitat-orange-strong); color: #fff; padding: 12px 18px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }
+  .stat { border: 1px solid var(--habitat-border); background: #fffdf9; border-radius: 10px; padding: 13px 16px; display: grid; gap: 3px; }
+  .stat span { color: var(--habitat-muted); font-size: .75rem; }
+  .stat strong { font-size: 1.4rem; }
+  .admin-grid { display: grid; grid-template-columns: 1.05fr 1.45fr 1.1fr; gap: 14px; align-items: start; }
+  .panel { border: 1px solid var(--habitat-border); background: #fffdf9; border-radius: 12px; padding: 16px; }
+  .panel h2 { margin: 0 0 14px; font-size: 1rem; }
+  .upload-target { width: 100%; min-height: 150px; border: 1.5px dashed var(--habitat-orange); border-radius: 10px; background: #fffaf3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--habitat-chocolate); }
+  .upload-target .upload-icon { font-size: 2rem; }
+  .upload-target span, .upload-target small { color: var(--habitat-muted); }
+  .upload-message, .saved, .video-state { font-size: .75rem; color: var(--habitat-muted); }
+  .upload-panel label, .assign label { display: grid; gap: 5px; margin-top: 10px; font-size: .74rem; font-weight: 700; }
+  .upload-panel input, .upload-panel select, .assign select, .assign textarea, .panel-heading input { width: 100%; min-height: 38px; border: 1px solid var(--habitat-border); border-radius: 7px; padding: 8px 9px; background: #fff; color: var(--habitat-chocolate); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .save { width: 100%; min-height: 40px; border: 0; border-radius: 8px; background: var(--habitat-chocolate); color: #fff; margin-top: 12px; }
+  .panel-heading { display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 10px; }
+  .panel-heading h2 { margin: 0; }
+  .student-table { margin: 14px 0; }
+  .row { display: grid; grid-template-columns: 1.25fr 1fr .75fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f0e3d5; font-size: .76rem; }
+  .row.head { color: var(--habitat-muted); font-size: .68rem; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #b8ada6; margin-right: 6px; }
+  .dot.active { background: var(--habitat-orange-strong); }
+  .students > a { font-size: .75rem; color: var(--habitat-orange-strong); }
+  .chips { border: 1px solid var(--habitat-border); background: #fff; border-radius: 7px; padding: 7px; min-height: 40px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips span { background: #f9e3be; padding: 4px 7px; border-radius: 6px; font-weight: 500; }
+  .assign textarea { min-height: 95px; resize: vertical; }
+  @media (max-width: 1050px) { .stats { grid-template-columns: repeat(2, 1fr); } .admin-grid { grid-template-columns: 1fr 1fr; } .assign { grid-column: 1 / -1; } }
+  @media (max-width: 720px) { .admin-shell { grid-template-columns: 1fr; } .admin-shell aside { min-height: auto; flex-direction: row; align-items: center; position: sticky; top: 0; z-index: 5; } .admin-shell aside nav { display: none; } .admin-shell .brand img { width: 100px; height: 55px; } .admin-shell .logout { margin-left: auto; margin-top: 0; } .admin-main { padding: 20px 14px; } .stats, .admin-grid { grid-template-columns: 1fr; } .assign { grid-column: auto; } }
+</style>

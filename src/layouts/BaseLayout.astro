@@ -1,0 +1,29 @@
+---
+import "@/styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+  bodyClass?: string;
+}
+
+const {
+  title,
+  description = "Hábitat Pilates · Fluir en movimiento",
+  bodyClass = ""
+} = Astro.props;
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#fffaf2" />
+    <link rel="icon" type="image/png" href="/brand/habitat-logo.png" />
+    <title>{title}</title>
+  </head>
+  <body class={bodyClass}>
+    <slot />
+  </body>
+</html>

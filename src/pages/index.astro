@@ -1,0 +1,170 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+
+const classTypes = [
+  { icon: "▱", title: "Pilates Reformer", body: "Clases dinámicas en máquina para tonificar, alinear y mejorar tu postura." },
+  { icon: "⌁", title: "Pilates Chair", body: "Trabajá fuerza, equilibrio y control con clases intensas y efectivas." },
+  { icon: "◯", title: "Pilates Mat", body: "Conectá con tu cuerpo a través de secuencias fluidas que mejoran movilidad y bienestar." },
+  { icon: "♡", title: "Pilates Prenatal", body: "Acompañamiento seguro y consciente en cada etapa de tu embarazo." }
+];
+const testimonials = [
+  ["Hábitat es mi lugar favorito de la semana. Salgo más liviana, más fuerte y con mucha energía. Se crea un espacio único.", "Malena R."],
+  ["Las clases son súper completas y el trato siempre amoroso. Noté cambios increíbles en mi cuerpo y mi postura.", "Flor T."],
+  ["Un estudio hermoso, cuidado y con toda la onda. Cada clase es un mimo para el cuerpo y la mente.", "Agus P."]
+];
+---
+<BaseLayout title="Hábitat Pilates · Fluir en Movimiento">
+  <Header />
+  <main>
+    <section id="inicio" class="hero">
+      <div class="hero-copy-wrap">
+        <div class="hero-copy">
+          <div class="leaf-art" aria-hidden="true">
+            <span class="leaf leaf-a"></span><span class="leaf leaf-b"></span><span class="leaf leaf-c"></span>
+          </div>
+          <h1>Movete.<br />Respirá.<br /><em>Sentite mejor.</em></h1>
+          <p>Pilates para fortalecer tu cuerpo, calmar tu mente<br /><strong>y reconectar con vos.</strong></p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#contacto">Reservar clase</a>
+            <a class="btn btn-secondary" href="/alumnos">Área alumnos</a>
+          </div>
+        </div>
+      </div>
+      <div class="hero-photo" role="img" aria-label="Práctica de Pilates Reformer en el estudio"></div>
+    </section>
+
+    <section id="clases" class="classes-section section">
+      <div class="container">
+        <p class="eyebrow">Nuestras clases</p>
+        <div class="class-grid">
+          {classTypes.map((item) => (
+            <article class="class-type card">
+              <div class="class-icon" aria-hidden="true">{item.icon}</div>
+              <h2>{item.title}</h2>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section id="estudio" class="story-section section">
+      <div class="container story-grid">
+        <div class="story-copy">
+          <p class="eyebrow">El estudio</p>
+          <h2 class="section-title">Un espacio para volver a vos.</h2>
+          <p>Un ambiente cálido y armonioso pensado para que te sientas bien desde que llegás. Cada detalle invita a fluir, desconectar y enfocarte en vos.</p>
+          <a class="btn btn-secondary" href="#contacto">Conocé el estudio</a>
+        </div>
+        <div class="studio-photo">
+          <img src="/images/studio.jpg" alt="Interior cálido de Hábitat Pilates" loading="lazy" />
+          <span class="decor-dot dot-1"></span><span class="decor-dot dot-2"></span>
+        </div>
+        <div id="equipo" class="teacher-copy">
+          <p class="eyebrow">Tu práctica</p>
+          <h2 class="section-title teacher-title">Hola, soy <em>Sol</em></h2>
+          <p>Instructora de Pilates apasionada por el movimiento consciente y el bienestar integral. Te acompaño a descubrir tu mejor versión desde el respeto y la conexión con tu cuerpo.</p>
+          <a class="btn btn-secondary" href="#contacto">Conocé más sobre mí</a>
+        </div>
+        <div class="teacher-photo">
+          <img src="/images/instructor.jpg" alt="Instructora de Hábitat Pilates" loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <section id="testimonios" class="testimonials section">
+      <div class="container">
+        <h2 class="testimonial-heading">Lo que dicen <em>nuestras alumnas</em></h2>
+        <div class="testimonial-grid">
+          {testimonials.map(([quote, name]) => (
+            <article class="testimonial card">
+              <span class="quote">“</span>
+              <p>{quote}</p>
+              <footer><span>— {name}</span><span class="stars">★★★★★</span></footer>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>
+
+<style>
+  .hero {
+    min-height: 505px;
+    display: grid;
+    grid-template-columns: 52% 48%;
+    overflow: hidden;
+    background: var(--habitat-paper);
+  }
+  .hero-copy-wrap { display: flex; justify-content: flex-end; position: relative; overflow: hidden; }
+  .hero-copy-wrap::before {
+    content: ""; position: absolute; width: 260px; height: 320px; left: -120px; top: 80px;
+    background: var(--habitat-yellow); border-radius: 42% 58% 64% 36% / 55% 35% 65% 45%; opacity: .75;
+  }
+  .hero-copy { width: min(100%, 630px); padding: 54px 72px 55px 38px; position: relative; z-index: 1; }
+  .hero h1 { margin: 0; font-family: var(--font-display); font-size: clamp(3.25rem, 5.7vw, 5.65rem); line-height: .94; font-weight: 500; letter-spacing: -.035em; }
+  .hero h1 em { color: var(--habitat-orange-strong); font-weight: 500; }
+  .hero-copy > p { margin: 28px 0 24px; color: var(--habitat-muted); font-size: 1.03rem; }
+  .hero-copy strong { color: var(--habitat-chocolate); }
+  .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero-photo { background: url('/images/hero-pilates.jpg') center / cover no-repeat; min-height: 505px; border-bottom-left-radius: 70px; }
+  .leaf-art { position: absolute; left: -18px; top: 110px; width: 145px; height: 210px; transform: rotate(-18deg); opacity: .9; }
+  .leaf { position: absolute; width: 32px; height: 78px; background: var(--habitat-orange); border-radius: 100% 0 100% 0; border: 2px solid var(--habitat-chocolate); }
+  .leaf-a { left: 15px; top: 10px; transform: rotate(-14deg); }
+  .leaf-b { left: 64px; top: 52px; transform: rotate(27deg); background: var(--habitat-yellow); }
+  .leaf-c { left: 12px; top: 98px; transform: rotate(-40deg); background: var(--habitat-chocolate); }
+
+  .classes-section { padding-top: 34px; padding-bottom: 38px; background: var(--habitat-paper); }
+  .class-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .class-type { padding: 28px 24px; text-align: center; }
+  .class-icon { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 14px; background: #faecd8; font-family: var(--font-display); font-size: 2rem; }
+  .class-type h2 { font-family: var(--font-display); margin: 0 0 8px; font-size: 1.3rem; font-weight: 500; }
+  .class-type p { margin: 0; color: var(--habitat-muted); font-size: .9rem; }
+
+  .story-section { padding-top: 24px; background: #fffaf5; }
+  .story-grid { display: grid; grid-template-columns: 1fr 1.35fr 1fr .68fr; gap: 30px; align-items: center; }
+  .story-copy, .teacher-copy { padding: 24px 0; }
+  .story-copy p:not(.eyebrow), .teacher-copy p:not(.eyebrow) { color: var(--habitat-muted); }
+  .story-copy .section-title, .teacher-copy .section-title { font-size: clamp(2rem, 3vw, 3rem); }
+  .studio-photo { position: relative; }
+  .studio-photo img { width: 100%; height: 280px; object-fit: cover; border-radius: 28px; box-shadow: var(--habitat-shadow); }
+  .teacher-photo img { width: 100%; height: 300px; object-fit: cover; object-position: 50% 25%; border-radius: 46% 54% 45% 55% / 55% 44% 56% 45%; }
+  .teacher-title em { color: var(--habitat-orange-strong); font-weight: inherit; }
+  .decor-dot { position: absolute; border-radius: 50%; background: var(--habitat-orange); }
+  .dot-1 { width: 33px; height: 33px; left: -12px; bottom: -8px; }
+  .dot-2 { width: 14px; height: 14px; left: -28px; bottom: -2px; background: var(--habitat-yellow); }
+
+  .testimonials { background: var(--habitat-paper); padding-top: 30px; }
+  .testimonial-heading { font-family: var(--font-display); font-weight: 500; font-size: 2rem; margin: 0 0 25px; }
+  .testimonial-heading em { color: var(--habitat-orange-strong); font-weight: inherit; }
+  .testimonial-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .testimonial { padding: 25px 28px; position: relative; }
+  .quote { position: absolute; font-size: 3rem; color: var(--habitat-orange); line-height: 1; }
+  .testimonial p { padding-left: 31px; color: var(--habitat-muted); margin-top: 5px; }
+  .testimonial footer { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: .86rem; }
+  .stars { color: var(--habitat-orange-strong); letter-spacing: 2px; }
+
+  @media (max-width: 1100px) {
+    .hero { grid-template-columns: 1fr 1fr; }
+    .hero-copy { padding-right: 34px; }
+    .class-grid { grid-template-columns: repeat(2, 1fr); }
+    .story-grid { grid-template-columns: 1fr 1.35fr; }
+    .teacher-copy { order: 3; }
+    .teacher-photo { order: 4; }
+  }
+  @media (max-width: 760px) {
+    .hero { grid-template-columns: 1fr; }
+    .hero-copy { padding: 48px 24px; width: 100%; }
+    .hero-photo { min-height: 330px; border-bottom-left-radius: 0; }
+    .leaf-art { opacity: .35; }
+    .class-grid, .testimonial-grid { grid-template-columns: 1fr; }
+    .story-grid { grid-template-columns: 1fr; }
+    .teacher-copy, .teacher-photo { order: initial; }
+    .studio-photo img { height: 235px; }
+    .teacher-photo img { max-width: 300px; margin: auto; }
+  }
+</style>
