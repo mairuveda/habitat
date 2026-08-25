@@ -1,6 +1,6 @@
 interface Env {
   SUPABASE_URL: string;
-  SUPABASE_ANON_KEY: string;
+  SUPABASE_PUBLISHABLE_KEY: string;
   CLOUDINARY_API_SECRET: string;
 }
 
@@ -25,7 +25,7 @@ async function requireAdmin(request: Request, env: Env): Promise<boolean> {
   const userResponse = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: {
       authorization,
-      apikey: env.SUPABASE_ANON_KEY
+      apikey: env.SUPABASE_PUBLISHABLE_KEY
     }
   });
   if (!userResponse.ok) return false;
@@ -36,7 +36,7 @@ async function requireAdmin(request: Request, env: Env): Promise<boolean> {
   const profileResponse = await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role&limit=1`, {
     headers: {
       authorization,
-      apikey: env.SUPABASE_ANON_KEY,
+      apikey: env.SUPABASE_PUBLISHABLE_KEY,
       accept: "application/json"
     }
   });
@@ -47,7 +47,7 @@ async function requireAdmin(request: Request, env: Env): Promise<boolean> {
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY || !env.CLOUDINARY_API_SECRET) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY || !env.CLOUDINARY_API_SECRET) {
     return json({ error: "Server configuration incomplete." }, 503);
   }
 

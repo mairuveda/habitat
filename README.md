@@ -53,7 +53,7 @@ En Cloudflare Pages agregar secretos del lado servidor:
 
 ```text
 SUPABASE_URL
-SUPABASE_ANON_KEY
+SUPABASE_PUBLISHABLE_KEY
 CLOUDINARY_API_SECRET
 ```
 

@@ -58,7 +58,12 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
         folder: "habitat/classes",
         showAdvancedOptions: false,
         uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, unknown>) => {
-          const token = (await supabase?.auth.getSession()).data.session?.access_token;
+          if (!supabase) {
+  throw new Error("Supabase no está configurado.");
+}
+
+const { data: authData } = await supabase.auth.getSession();
+const token = authData.session?.access_token;
           const response = await fetch("/api/cloudinary/sign", {
             method: "POST",
             headers: {
