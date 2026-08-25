@@ -1,12 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = import.meta.env.PUBLIC_SUPABASE_URL;
-const anonKey = import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const publishableKey =
+  import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
-export const isSupabaseConfigured = Boolean(url && anonKey);
+export const isSupabaseConfigured = Boolean(url && publishableKey);
 
-export const supabase = isSupabaseConfigured
-  ? createClient(url!, anonKey!, {
+export const supabase: SupabaseClient | null = isSupabaseConfigured
+  ? createClient(url!, publishableKey!, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,

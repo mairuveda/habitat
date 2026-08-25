@@ -1,19 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type UploadResult = {
+export type UploadResult = {
   public_id: string;
   secure_url: string;
   duration?: number;
-  thumbnail_url?: string;
+  format?: string;
+  version?: number;
+  type?: "authenticated" | "upload" | "private";
+  bytes?: number;
 };
 
 type Props = { onUploaded: (result: UploadResult) => void };
 
+type UploadWidget = { open: () => void; destroy: () => void };
+type UploadWidgetResult = { event: string; info: UploadResult };
+
 declare global {
   interface Window {
     cloudinary?: {
-      createUploadWidget: (options: Record<string, unknown>, callback: (error: unknown, result: { event: string; info: UploadResult }) => void) => { open: () => void; destroy: () => void };
+      createUploadWidget: (
+        options: Record<string, unknown>,
+        callback: (error: unknown, result: UploadWidgetResult) => void
+      ) => UploadWidget;
     };
   }
 }
@@ -21,28 +30,51 @@ declare global {
 export default function CloudinaryUpload({ onUploaded }: Props) {
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const widgetRef = useRef<{ open: () => void; destroy: () => void } | null>(null);
+  const widgetRef = useRef<UploadWidget | null>(null);
 
   const cloudName = import.meta.env.PUBLIC_CLOUDINARY_CLOUD_NAME;
   const apiKey = import.meta.env.PUBLIC_CLOUDINARY_API_KEY;
+  const uploadPreset = import.meta.env.PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
   useEffect(() => {
     if (!cloudName || !apiKey) return;
 
+    const existing = document.querySelector<HTMLScriptElement>('script[data-habitat-cloudinary="true"]');
+    if (existing) {
+      if (window.cloudinary) setReady(true);
+      else existing.addEventListener("load", () => setReady(true), { once: true });
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = "https://upload-widget.cloudinary.com/global/all.js";
     script.async = true;
+    script.dataset.habitatCloudinary = "true";
     script.onload = () => setReady(true);
     document.body.appendChild(script);
+
     return () => {
       widgetRef.current?.destroy();
-      script.remove();
     };
   }, [cloudName, apiKey]);
 
+  async function getToken(): Promise<string> {
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error("La sesión expiró.");
+    return token;
+  }
+
   async function openWidget() {
+    setMessage(null);
     if (!ready || !window.cloudinary || !cloudName || !apiKey) {
-      setMessage("Conectá Cloudinary para habilitar la carga real de videos.");
+      setMessage("Cloudinary todavía no está configurado.");
+      return;
+    }
+
+    if (!uploadPreset) {
+      setMessage("Falta PUBLIC_CLOUDINARY_UPLOAD_PRESET. Usá el preset firmado/authenticated de Hábitat.");
       return;
     }
 
@@ -50,41 +82,53 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
       widgetRef.current = window.cloudinary.createUploadWidget({
         cloudName,
         apiKey,
+        uploadPreset,
         resourceType: "video",
-        sources: ["local", "google_drive", "url", "camera"],
+        sources: ["local", "google_drive"],
         multiple: false,
         maxFileSize: 100_000_000,
-        clientAllowedFormats: ["mp4", "mov", "webm"],
-        folder: "habitat/classes",
+        clientAllowedFormats: ["mp4"],
+        assetFolder: "habitat/classes",
         showAdvancedOptions: false,
-        uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, unknown>) => {
-          if (!supabase) {
-  throw new Error("Supabase no está configurado.");
-}
-
-const { data: authData } = await supabase.auth.getSession();
-const token = authData.session?.access_token;
+        singleUploadAutoClose: true,
+        uploadSignature: async (
+          callback: (signature: string) => void,
+          paramsToSign: Record<string, string | number | boolean>
+        ) => {
+          const token = await getToken();
           const response = await fetch("/api/cloudinary/sign", {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
+              "content-type": "application/json",
+              authorization: `Bearer ${token}`
             },
             body: JSON.stringify({ paramsToSign })
           });
-          if (!response.ok) throw new Error("No se pudo autorizar la carga.");
-          const data = await response.json() as { signature: string };
-          callback(data.signature);
+          const payload = await response.json().catch(() => ({})) as { signature?: string; error?: string };
+          if (!response.ok || !payload.signature) throw new Error(payload.error ?? "No se pudo autorizar la carga.");
+          callback(payload.signature);
         }
       }, (error, result) => {
         if (error) {
           setMessage("La carga no pudo completarse.");
           return;
         }
-        if (result.event === "success") {
-          setMessage("Video cargado correctamente.");
-          onUploaded(result.info);
+        if (result.event !== "success") return;
+
+        const inferredType: UploadResult["type"] = result.info.type
+          ?? (result.info.secure_url.includes("/video/authenticated/") ? "authenticated"
+            : result.info.secure_url.includes("/video/private/") ? "private"
+              : "upload");
+        const normalized = { ...result.info, type: inferredType };
+
+        if (inferredType !== "authenticated") {
+          setMessage("El video se cargó, pero NO quedó privado. Revisá que el preset de Cloudinary use delivery type 'authenticated'.");
+          onUploaded(normalized);
+          return;
         }
+
+        setMessage("Video privado cargado correctamente.");
+        onUploaded(normalized);
       });
     }
 
@@ -93,13 +137,13 @@ const token = authData.session?.access_token;
 
   return (
     <div className="upload-box">
-      <button type="button" className="upload-target" onClick={openWidget}>
+      <button type="button" className="upload-target" onClick={() => void openWidget()}>
         <span className="upload-icon">↑</span>
-        <strong>Arrastrá y subí tu video</strong>
-        <span>o elegí desde tu equipo / Google Drive</span>
-        <small>MP4, MOV o WebM · demo: hasta 100 MB</small>
+        <strong>Subir video</strong>
+        <span>Equipo o Google Drive</span>
+        <small>MP4 · demo Free: hasta 100 MB</small>
       </button>
-      {message && <p className="upload-message">{message}</p>}
+      {message && <p className="upload-message" role="status">{message}</p>}
     </div>
   );
 }

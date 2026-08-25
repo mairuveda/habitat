@@ -1,7 +1,8 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import StudentShell from "@/components/student/StudentShell.astro";
+import StudentApp from "@/components/student/StudentApp";
+import "@/styles/student.css";
 ---
 <BaseLayout title="Mis clases · Hábitat">
-  <StudentShell />
+  <StudentApp client:only="react" />
 </BaseLayout>

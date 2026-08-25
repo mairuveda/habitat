@@ -1,32 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
-import { isSupabaseConfigured } from "@/lib/supabase";
-import { listVisibleClasses, type PilatesClass } from "@/lib/classes";
-
-const demoClasses: PilatesClass[] = [
-  { id: "maleta", title: "Pilates en tu Maleta", description: "Rutina completa para mantenerte en movimiento", duration: 25, level: "Intermedio", category: "Viajes", image: "/images/classes/pilates-maleta.jpg" },
-  { id: "movilidad", title: "Movilidad Total", description: "Libera tensiones y mejora tu rango de movimiento", duration: 35, level: "Todos", category: "Movilidad", image: "/images/classes/movilidad-total.jpg" },
-  { id: "energia", title: "Energía en 20", description: "Sesión rápida para activar cuerpo y mente", duration: 20, level: "Principiante", category: "Quick Flow", image: "/images/classes/energia-20.jpg" },
-  { id: "fuerza", title: "Fuerza y Control", description: "Fortalece tu centro y tonifica", duration: 40, level: "Intermedio", category: "Fuerza", image: "/images/classes/fuerza-control.jpg" },
-  { id: "caderas", title: "Caderas Libres", description: "Movilidad profunda para caderas y espalda baja", duration: 30, level: "Todos", category: "Movilidad", image: "/images/classes/caderas-libres.jpg" },
-  { id: "hotel", title: "Hotel Room Flow", description: "Rutina sin equipo para espacios pequeños", duration: 25, level: "Principiante", category: "Viajes", image: "/images/classes/hotel-room-flow.jpg" }
-];
+import { getPlaybackUrl, listVisibleClasses, type PilatesClass } from "@/lib/classes";
 
 export default function ClassLibrary() {
-  const [items, setItems] = useState<PilatesClass[]>(demoClasses);
+  const [items, setItems] = useState<PilatesClass[]>([]);
+  const [loading, setLoading] = useState(true);
   const [duration, setDuration] = useState("all");
   const [level, setLevel] = useState("all");
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<PilatesClass | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [playbackLoading, setPlaybackLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    let cancelled = false;
     listVisibleClasses()
       .then((classes) => {
-        if (classes.length > 0) setItems(classes);
+        if (!cancelled) setItems(classes);
       })
-      .catch(() => setStatus("No pudimos cargar la biblioteca online. Mostramos el contenido de demostración."));
+      .catch(() => {
+        if (!cancelled) setStatus("No pudimos cargar las clases. Intentá nuevamente.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const categories = useMemo(() => Array.from(new Set(items.map((item) => item.category))), [items]);
@@ -38,56 +39,77 @@ export default function ClassLibrary() {
     return durationOk && levelOk && categoryOk && searchOk;
   }), [items, duration, level, category, search]);
 
+  async function openClass(item: PilatesClass) {
+    setSelected(item);
+    setPlaybackUrl(null);
+    setPlaybackLoading(true);
+    setStatus(null);
+    try {
+      setPlaybackUrl(await getPlaybackUrl(item.id));
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "No pudimos abrir el video.");
+    } finally {
+      setPlaybackLoading(false);
+    }
+  }
+
+  function closePlayer() {
+    setSelected(null);
+    setPlaybackUrl(null);
+    setPlaybackLoading(false);
+  }
+
   return (
     <div className="library">
       <div className="library-toolbar">
         <div className="filters">
-          <select aria-label="Duración" value={duration} onChange={(e) => setDuration(e.target.value)}>
+          <select aria-label="Duración" value={duration} onChange={(event) => setDuration(event.target.value)}>
             <option value="all">Duración</option><option value="short">Hasta 25 min</option><option value="long">Más de 25 min</option>
           </select>
-          <select aria-label="Nivel" value={level} onChange={(e) => setLevel(e.target.value)}>
+          <select aria-label="Nivel" value={level} onChange={(event) => setLevel(event.target.value)}>
             <option value="all">Nivel</option><option>Principiante</option><option>Intermedio</option>
           </select>
-          <select aria-label="Categoría" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <select aria-label="Categoría" value={category} onChange={(event) => setCategory(event.target.value)}>
             <option value="all">Categoría</option>{categories.map((item) => <option key={item}>{item}</option>)}
           </select>
           <button type="button" onClick={() => { setDuration("all"); setLevel("all"); setCategory("all"); setSearch(""); }}>Limpiar filtros</button>
         </div>
-        <input className="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar clases..." aria-label="Buscar clases" />
+        <input className="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar clases..." aria-label="Buscar clases" />
       </div>
       {status && <p className="library-status">{status}</p>}
       <h2>Explora nuestra biblioteca</h2>
-      <div className="class-cards">
-        {visible.map((item) => (
-          <button className="class-card" key={item.id} type="button" onClick={() => setSelected(item)}>
-            <div className="thumb-wrap">
-              <img src={item.image} alt="" />
-              <span className="duration">{item.duration || "—"} min</span>
-              <span className="category">{item.category}</span>
-            </div>
-            <div className="class-body">
-              <h3>{item.title}</h3>
-              <p>{item.description}</p>
-              <span>Nivel: {item.level}</span>
-            </div>
-          </button>
-        ))}
-      </div>
-      {visible.length === 0 && <p className="empty">No encontramos clases con esos filtros.</p>}
+      {loading ? <p className="empty">Cargando clases…</p> : (
+        <>
+          <div className="class-cards">
+            {visible.map((item) => (
+              <button className="class-card" key={item.id} type="button" onClick={() => void openClass(item)}>
+                <div className="thumb-wrap">
+                  <img src={item.image} alt="" />
+                  <span className="duration">{item.duration || "—"} min</span>
+                  <span className="category">{item.category}</span>
+                </div>
+                <div className="class-body"><h3>{item.title}</h3><p>{item.description}</p><span>Nivel: {item.level}</span></div>
+              </button>
+            ))}
+          </div>
+          {visible.length === 0 && <p className="empty">Todavía no hay clases publicadas para tu grupo.</p>}
+        </>
+      )}
 
       {selected && (
-        <div className="player-backdrop" role="presentation" onClick={() => setSelected(null)}>
+        <div className="player-backdrop" role="presentation" onClick={closePlayer}>
           <section className="player-modal" role="dialog" aria-modal="true" aria-label={selected.title} onClick={(event) => event.stopPropagation()}>
-            <button className="player-close" type="button" onClick={() => setSelected(null)} aria-label="Cerrar">×</button>
+            <button className="player-close" type="button" onClick={closePlayer} aria-label="Cerrar">×</button>
             <div className="player-frame">
-              {selected.playbackUrl ? (
-                <video controls playsInline preload="metadata" src={selected.playbackUrl} />
+              {playbackLoading ? (
+                <div className="player-placeholder"><span>…</span><strong>Preparando clase</strong></div>
+              ) : playbackUrl ? (
+                <video key={playbackUrl} controls playsInline preload="metadata" src={playbackUrl} />
               ) : (
-                <div className="player-placeholder"><span>▶</span><strong>{selected.title}</strong><p>El reproductor queda activo al cargar el primer video real desde Administración.</p></div>
+                <div className="player-placeholder"><span>!</span><strong>No pudimos abrir el video</strong><p>Verificá tu acceso o intentá nuevamente.</p></div>
               )}
             </div>
-            <h3>{selected.title}</h3>
-            <p>{selected.description}</p>
+            <h3>{selected.title}</h3><p>{selected.description}</p>
           </section>
         </div>
       )}

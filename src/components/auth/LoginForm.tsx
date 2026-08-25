@@ -1,67 +1,82 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
+import { getCurrentProfile, signOut } from "@/lib/auth";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
-type Props = { redirectTo?: string };
-
-export default function LoginForm({ redirectTo = "/alumnos/dashboard" }: Props) {
+export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const reason = new URLSearchParams(window.location.search).get("reason");
+    if (reason === "inactive") setMessage("Tu acceso está suspendido. Contactá al estudio.");
+    if (reason === "auth") setMessage("Iniciá sesión para continuar.");
+  }, []);
+
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
 
     if (!isSupabaseConfigured || !supabase) {
-      window.location.href = redirectTo;
+      setMessage("El servicio de autenticación no está configurado.");
       return;
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setMessage("No pudimos iniciar sesión. Revisá el correo y la contraseña.");
+        return;
+      }
 
-    if (error) {
-      setMessage("No pudimos iniciar sesión. Revisá el correo y la contraseña.");
-      return;
+      const profile = await getCurrentProfile();
+      if (!profile) {
+        await signOut();
+        setMessage("No encontramos un perfil habilitado para esta cuenta.");
+        return;
+      }
+
+      if (!profile.active) {
+        await signOut();
+        setMessage("Tu acceso está suspendido. Contactá al estudio.");
+        return;
+      }
+
+      window.location.href = profile.role === "admin" ? "/admin" : "/alumnos/dashboard";
+    } finally {
+      setLoading(false);
     }
-
-    window.location.href = redirectTo;
-  }
-
-  async function useMagicLink() {
-    if (!email) {
-      setMessage("Ingresá tu correo para recibir el enlace de acceso.");
-      return;
-    }
-    if (!isSupabaseConfigured || !supabase) {
-      setMessage("El acceso por enlace se activa al conectar Supabase.");
-      return;
-    }
-
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}${redirectTo}` }
-    });
-    setLoading(false);
-    setMessage(error ? "No pudimos enviar el enlace." : "Te enviamos un enlace de acceso al correo.");
   }
 
   return (
     <form className="login-form" onSubmit={onSubmit}>
       <label>
         Correo electrónico
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" autoComplete="email" required />
+        <input
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="tu@correo.com"
+          autoComplete="email"
+          required
+        />
       </label>
       <label>
         Contraseña
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" />
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="••••••••"
+          autoComplete="current-password"
+          required
+        />
       </label>
-      <button className="login-primary" disabled={loading}>{loading ? "Ingresando…" : "Entrar"}</button>
-      <button className="login-link" type="button" onClick={useMagicLink} disabled={loading}>Entrar con enlace al correo</button>
-      {!isSupabaseConfigured && <p className="demo-note">Modo visual: todavía no hay proyecto Supabase conectado.</p>}
+      <button className="login-primary" disabled={loading}>
+        {loading ? "Ingresando…" : "Entrar"}
+      </button>
       {message && <p className="login-message" role="status">{message}</p>}
     </form>
   );
