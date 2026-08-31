@@ -7,6 +7,11 @@ type State =
   | { status: "ready"; profile: Profile; message: null }
   | { status: "error"; profile: null; message: string };
 
+function routeForRole(role: UserRole, reason?: string): string {
+  const base = role === "admin" ? "/admin" : "/alumnos/dashboard";
+  return reason ? `${base}?reason=${encodeURIComponent(reason)}` : base;
+}
+
 export function useProtectedProfile(allowedRoles: readonly UserRole[]): State {
   const rolesKey = allowedRoles.join(",");
   const [state, setState] = useState<State>({ status: "loading", profile: null, message: null });
@@ -16,30 +21,36 @@ export function useProtectedProfile(allowedRoles: readonly UserRole[]): State {
 
     async function check() {
       if (!isSupabaseConfigured) {
-        setState({ status: "error", profile: null, message: "Supabase no está configurado." });
+        window.location.replace("/alumnos?reason=config");
         return;
       }
 
-      const profile = await getCurrentProfile();
-      if (cancelled) return;
+      try {
+        const profile = await getCurrentProfile();
+        if (cancelled) return;
 
-      if (!profile) {
-        window.location.replace("/alumnos?reason=auth");
-        return;
+        if (!profile) {
+          await signOut().catch(() => undefined);
+          if (!cancelled) window.location.replace("/alumnos?reason=auth");
+          return;
+        }
+
+        if (!profile.active) {
+          await signOut().catch(() => undefined);
+          if (!cancelled) window.location.replace("/alumnos?reason=inactive");
+          return;
+        }
+
+        if (!allowedRoles.includes(profile.role)) {
+          window.location.replace(routeForRole(profile.role, "forbidden"));
+          return;
+        }
+
+        setState({ status: "ready", profile, message: null });
+      } catch {
+        await signOut().catch(() => undefined);
+        if (!cancelled) window.location.replace("/alumnos?reason=validation");
       }
-
-      if (!profile.active) {
-        await signOut();
-        if (!cancelled) window.location.replace("/alumnos?reason=inactive");
-        return;
-      }
-
-      if (!allowedRoles.includes(profile.role)) {
-        window.location.replace(profile.role === "admin" ? "/admin" : "/alumnos/dashboard");
-        return;
-      }
-
-      setState({ status: "ready", profile, message: null });
     }
 
     void check();

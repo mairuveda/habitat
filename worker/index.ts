@@ -3,13 +3,18 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 interface Env {
   ASSETS: Fetcher;
   SUPABASE_URL?: string;
+  PUBLIC_SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
+  PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_ANON_KEY?: string;
+  PUBLIC_SUPABASE_ANON_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   CLOUDINARY_CLOUD_NAME?: string;
+  PUBLIC_CLOUDINARY_CLOUD_NAME?: string;
   CLOUDINARY_API_SECRET?: string;
   CLOUDINARY_UPLOAD_PRESET?: string;
+  PUBLIC_CLOUDINARY_UPLOAD_PRESET?: string;
 }
 
 type AuthContext = {
@@ -49,8 +54,42 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+function getSupabaseUrl(env: Env): string | null {
+  return env.SUPABASE_URL ?? env.PUBLIC_SUPABASE_URL ?? null;
+}
+
 function getPublishableKey(env: Env): string | null {
-  return env.SUPABASE_PUBLISHABLE_KEY ?? env.SUPABASE_ANON_KEY ?? null;
+  return env.SUPABASE_PUBLISHABLE_KEY
+    ?? env.PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ?? env.SUPABASE_ANON_KEY
+    ?? env.PUBLIC_SUPABASE_ANON_KEY
+    ?? null;
+}
+
+function getAdminKey(env: Env): string | null {
+  return env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? null;
+}
+
+function getCloudName(env: Env): string | null {
+  return env.CLOUDINARY_CLOUD_NAME ?? env.PUBLIC_CLOUDINARY_CLOUD_NAME ?? null;
+}
+
+function getCloudinaryPreset(env: Env): string | null {
+  return env.CLOUDINARY_UPLOAD_PRESET ?? env.PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? null;
+}
+
+function runtimeServices(env: Env) {
+  const supabaseUrl = getSupabaseUrl(env);
+  const publishableKey = getPublishableKey(env);
+  const adminKey = getAdminKey(env);
+  const cloudName = getCloudName(env);
+  const uploadPreset = getCloudinaryPreset(env);
+
+  return {
+    auth: Boolean(supabaseUrl && publishableKey),
+    admin: Boolean(supabaseUrl && publishableKey && adminKey),
+    video: Boolean(cloudName && uploadPreset && env.CLOUDINARY_API_SECRET)
+  };
 }
 
 function createServerClient(url: string, key: string): SupabaseClient {
@@ -64,19 +103,20 @@ function createServerClient(url: string, key: string): SupabaseClient {
 }
 
 async function requireAuthenticated(request: Request, env: Env): Promise<AuthContext | Response> {
+  const supabaseUrl = getSupabaseUrl(env);
   const publishableKey = getPublishableKey(env);
-  if (!env.SUPABASE_URL || !publishableKey) return json({ error: "Configuración de servidor incompleta." }, 503);
+  if (!supabaseUrl || !publishableKey) return json({ error: "El servicio de autenticación no está disponible." }, 503);
 
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return json({ error: "No autorizado." }, 401);
   const token = authorization.slice("Bearer ".length).trim();
   if (!token) return json({ error: "No autorizado." }, 401);
 
-  const authClient = createServerClient(env.SUPABASE_URL, publishableKey);
+  const authClient = createServerClient(supabaseUrl, publishableKey);
   const { data: authData, error: authError } = await authClient.auth.getUser(token);
   if (authError || !authData.user) return json({ error: "Sesión inválida." }, 401);
 
-  const userClient = createClient(env.SUPABASE_URL, publishableKey, {
+  const userClient = createClient(supabaseUrl, publishableKey, {
     accessToken: async () => token,
     auth: {
       autoRefreshToken: false,
@@ -91,10 +131,12 @@ async function requireAuthenticated(request: Request, env: Env): Promise<AuthCon
 async function requireAdmin(request: Request, env: Env): Promise<AdminContext | Response> {
   const auth = await requireAuthenticated(request, env);
   if (auth instanceof Response) return auth;
-  const secretKey = env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!env.SUPABASE_URL || !secretKey) return json({ error: "Configuración de administración incompleta." }, 503);
 
-  const admin = createServerClient(env.SUPABASE_URL, secretKey);
+  const supabaseUrl = getSupabaseUrl(env);
+  const secretKey = getAdminKey(env);
+  if (!supabaseUrl || !secretKey) return json({ error: "La administración de usuarios no está disponible." }, 503);
+
+  const admin = createServerClient(supabaseUrl, secretKey);
   const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select("role,active")
@@ -186,7 +228,9 @@ function base64Url(bytes: Uint8Array): string {
 async function signCloudinaryUpload(request: Request, env: Env): Promise<Response> {
   const context = await requireAdmin(request, env);
   if (context instanceof Response) return context;
-  if (!env.CLOUDINARY_API_SECRET) return json({ error: "Cloudinary no está configurado en el Worker." }, 503);
+
+  const uploadPreset = getCloudinaryPreset(env);
+  if (!env.CLOUDINARY_API_SECRET || !uploadPreset) return json({ error: "La carga de videos no está disponible." }, 503);
 
   const body = await request.json().catch(() => ({})) as SignBody;
   const params = body.paramsToSign;
@@ -196,9 +240,7 @@ async function signCloudinaryUpload(request: Request, env: Env): Promise<Respons
   if (folder && folder !== "habitat/classes") return json({ error: "Carpeta de carga inválida." }, 400);
 
   const preset = String(params.upload_preset ?? "");
-  if (env.CLOUDINARY_UPLOAD_PRESET && preset !== env.CLOUDINARY_UPLOAD_PRESET) {
-    return json({ error: "Upload preset inválido." }, 400);
-  }
+  if (preset !== uploadPreset) return json({ error: "Upload preset inválido." }, 400);
 
   const timestamp = Number(params.timestamp ?? 0);
   const now = Math.floor(Date.now() / 1000);
@@ -217,7 +259,8 @@ async function signCloudinaryUpload(request: Request, env: Env): Promise<Respons
 }
 
 async function signedDeliveryUrl(env: Env, row: PlaybackRow): Promise<string> {
-  if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_SECRET) throw new Error("Cloudinary runtime incompleto.");
+  const cloudName = getCloudName(env);
+  if (!cloudName || !env.CLOUDINARY_API_SECRET) throw new Error("Cloudinary runtime incompleto.");
 
   const format = row.video_format || "mp4";
   const versionPart = row.video_version ? `v${row.video_version}/` : "";
@@ -227,18 +270,20 @@ async function signedDeliveryUrl(env: Env, row: PlaybackRow): Promise<string> {
   const deliveryType = row.video_delivery_type || "upload";
 
   if (deliveryType === "upload") {
-    return `https://res.cloudinary.com/${encodeURIComponent(env.CLOUDINARY_CLOUD_NAME)}/video/upload/${encodedPath}`;
+    return `https://res.cloudinary.com/${encodeURIComponent(cloudName)}/video/upload/${encodedPath}`;
   }
 
   const digest = await sha1Bytes(`${assetPath}${env.CLOUDINARY_API_SECRET}`);
   const signature = base64Url(digest).slice(0, 8);
-  return `https://res.cloudinary.com/${encodeURIComponent(env.CLOUDINARY_CLOUD_NAME)}/video/${deliveryType}/s--${signature}--/${encodedPath}`;
+  return `https://res.cloudinary.com/${encodeURIComponent(cloudName)}/video/${deliveryType}/s--${signature}--/${encodedPath}`;
 }
 
 async function playback(request: Request, env: Env, classId: string): Promise<Response> {
   const context = await requireAuthenticated(request, env);
   if (context instanceof Response) return context;
-  if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_SECRET) return json({ error: "Cloudinary no está configurado." }, 503);
+
+  const cloudName = getCloudName(env);
+  if (!cloudName || !env.CLOUDINARY_API_SECRET) return json({ error: "El servicio de video no está disponible." }, 503);
 
   const { data, error } = await context.userClient
     .from("classes")
@@ -262,7 +307,9 @@ async function playback(request: Request, env: Env, classId: string): Promise<Re
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
-  if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, version: "0.4.0" });
+  if (url.pathname === "/api/health" && request.method === "GET") {
+    return json({ ok: true, version: "0.4.0", services: runtimeServices(env) });
+  }
   if (url.pathname === "/api/admin/students" && request.method === "POST") return createStudent(request, env);
   if (url.pathname === "/api/cloudinary/sign" && request.method === "POST") return signCloudinaryUpload(request, env);
 

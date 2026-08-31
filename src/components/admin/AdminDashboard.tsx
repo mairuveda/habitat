@@ -18,15 +18,25 @@ import {
   type AdminPilatesClass
 } from "@/lib/classes";
 
-type Props = { adminName: string };
+type Props = {
+  adminName: string;
+  routeNotice?: string | null;
+};
 
-export default function AdminDashboard({ adminName }: Props) {
+type RuntimeServices = {
+  auth: boolean;
+  admin: boolean;
+  video: boolean;
+};
+
+export default function AdminDashboard({ adminName, routeNotice }: Props) {
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [groups, setGroups] = useState<StudioGroup[]>([]);
   const [classes, setClasses] = useState<AdminPilatesClass[]>([]);
   const [classCount, setClassCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
+  const [services, setServices] = useState<RuntimeServices | null>(null);
   const [studentDialogOpen, setStudentDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [classDialogOpen, setClassDialogOpen] = useState(false);
@@ -55,8 +65,20 @@ export default function AdminDashboard({ adminName }: Props) {
     }
   }
 
+  async function checkRuntimeServices() {
+    try {
+      const response = await fetch("/api/health", { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json() as { services?: RuntimeServices };
+      if (payload.services) setServices(payload.services);
+    } catch {
+      // La UI sigue operativa; las acciones individuales mostrarán su error si el Worker no responde.
+    }
+  }
+
   useEffect(() => {
     void refresh();
+    void checkRuntimeServices();
   }, []);
 
   const activeCount = useMemo(() => students.filter((student) => student.active).length, [students]);
@@ -66,11 +88,22 @@ export default function AdminDashboard({ adminName }: Props) {
     return students.filter((student) => `${student.full_name} ${student.email} ${student.group_name ?? ""}`.toLowerCase().includes(term));
   }, [students, search]);
 
+  const runtimeWarning = useMemo(() => {
+    if (!services) return null;
+    const missing: string[] = [];
+    if (!services.admin) missing.push("altas de alumnas");
+    if (!services.video) missing.push("videos");
+    return missing.length > 0
+      ? `Configuración pendiente en Cloudflare: ${missing.join(" y ")}. El resto del panel sigue disponible.`
+      : null;
+  }, [services]);
+
   async function submitStudent(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus(null);
     setTemporaryPassword(null);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
 
     try {
       const result = await createStudent({
@@ -80,7 +113,7 @@ export default function AdminDashboard({ adminName }: Props) {
         groupId: String(form.get("groupId") ?? "") || null
       });
       setTemporaryPassword(result.temporaryPassword ?? null);
-      event.currentTarget.reset();
+      formElement.reset();
       await refresh();
       if (!result.temporaryPassword) setStudentDialogOpen(false);
       setStatus("Alumna creada correctamente.");
@@ -91,10 +124,13 @@ export default function AdminDashboard({ adminName }: Props) {
 
   async function submitGroup(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    setStatus(null);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+
     try {
       await createGroup(String(form.get("name") ?? ""));
-      event.currentTarget.reset();
+      formElement.reset();
       setGroupDialogOpen(false);
       await refresh();
       setStatus("Grupo creado.");
@@ -112,11 +148,12 @@ export default function AdminDashboard({ adminName }: Props) {
       return;
     }
     if ((uploaded.type ?? "upload") !== "authenticated") {
-      setStatus("Ese video no quedó privado. Corregí el upload preset de Cloudinary para usar delivery type 'authenticated' y volvé a subirlo.");
+      setStatus("Ese video no quedó privado. Revisá el preset de Cloudinary y volvé a subirlo.");
       return;
     }
 
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const groupIds = form.getAll("groupIds").map(String).filter(Boolean);
     setSavingClass(true);
     try {
@@ -134,7 +171,7 @@ export default function AdminDashboard({ adminName }: Props) {
         published: true,
         groupIds
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setUploaded(null);
       setClassDialogOpen(false);
       await refresh();
@@ -150,6 +187,7 @@ export default function AdminDashboard({ adminName }: Props) {
     try {
       await setStudentActive(student.id, !student.active);
       setStudents((current) => current.map((item) => item.id === student.id ? { ...item, active: !student.active } : item));
+      setStatus(student.active ? "Alumna suspendida." : "Alumna activada.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No pudimos cambiar el estado.");
     }
@@ -164,6 +202,7 @@ export default function AdminDashboard({ adminName }: Props) {
         group_id: group?.id ?? null,
         group_name: group?.name ?? null
       } : item));
+      setStatus(group ? `${student.full_name || "La alumna"} ahora pertenece a ${group.name}.` : "La alumna quedó sin grupo.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No pudimos asignar el grupo.");
     }
@@ -173,6 +212,7 @@ export default function AdminDashboard({ adminName }: Props) {
     try {
       await setClassPublished(item.id, !item.published);
       setClasses((current) => current.map((entry) => entry.id === item.id ? { ...entry, published: !item.published } : entry));
+      setStatus(item.published ? "Clase pausada." : "Clase publicada.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No pudimos cambiar la publicación.");
     }
@@ -196,6 +236,8 @@ export default function AdminDashboard({ adminName }: Props) {
         <div className="stat"><span>Clases</span><strong>{classCount}</strong></div>
       </div>
 
+      {routeNotice && <p className="admin-status" role="status">{routeNotice}</p>}
+      {runtimeWarning && <p className="admin-status" role="status">{runtimeWarning}</p>}
       {status && <p className="admin-status" role="status">{status}</p>}
 
       <div className="admin-content-grid">

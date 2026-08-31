@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { getCurrentProfile, signOut } from "@/lib/auth";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
+const reasonMessages: Record<string, string> = {
+  auth: "Iniciá sesión para continuar.",
+  inactive: "Tu acceso está suspendido. Contactá al estudio.",
+  expired: "Tu sesión terminó. Volvé a iniciar sesión.",
+  validation: "No pudimos validar tu sesión anterior. Volvé a iniciar sesión.",
+  config: "El acceso está temporalmente no disponible. La configuración del servicio está incompleta."
+};
+
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -10,8 +18,7 @@ export default function LoginForm() {
 
   useEffect(() => {
     const reason = new URLSearchParams(window.location.search).get("reason");
-    if (reason === "inactive") setMessage("Tu acceso está suspendido. Contactá al estudio.");
-    if (reason === "auth") setMessage("Iniciá sesión para continuar.");
+    if (reason && reasonMessages[reason]) setMessage(reasonMessages[reason]);
   }, []);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -19,7 +26,7 @@ export default function LoginForm() {
     setMessage(null);
 
     if (!isSupabaseConfigured || !supabase) {
-      setMessage("El servicio de autenticación no está configurado.");
+      setMessage("El servicio de autenticación no está disponible en este momento.");
       return;
     }
 
@@ -33,18 +40,21 @@ export default function LoginForm() {
 
       const profile = await getCurrentProfile();
       if (!profile) {
-        await signOut();
+        await signOut().catch(() => undefined);
         setMessage("No encontramos un perfil habilitado para esta cuenta.");
         return;
       }
 
       if (!profile.active) {
-        await signOut();
+        await signOut().catch(() => undefined);
         setMessage("Tu acceso está suspendido. Contactá al estudio.");
         return;
       }
 
-      window.location.href = profile.role === "admin" ? "/admin" : "/alumnos/dashboard";
+      window.location.replace(profile.role === "admin" ? "/admin" : "/alumnos/dashboard");
+    } catch {
+      await signOut().catch(() => undefined);
+      setMessage("No pudimos validar tu sesión. Intentá nuevamente.");
     } finally {
       setLoading(false);
     }

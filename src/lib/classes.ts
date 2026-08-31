@@ -31,7 +31,7 @@ export type NewPilatesClass = {
 };
 
 export async function listVisibleClasses(): Promise<PilatesClass[]> {
-  if (!isSupabaseConfigured || !supabase) throw new Error("Supabase no está configurado.");
+  if (!isSupabaseConfigured || !supabase) throw new Error("El servicio de clases no está disponible.");
 
   const { data, error } = await supabase
     .from("classes")
@@ -39,7 +39,7 @@ export async function listVisibleClasses(): Promise<PilatesClass[]> {
     .eq("published", true)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) throw new Error("No pudimos cargar las clases.");
 
   return (data ?? []).map((item) => ({
     id: item.id,
@@ -53,13 +53,13 @@ export async function listVisibleClasses(): Promise<PilatesClass[]> {
 }
 
 export async function listAdminClasses(): Promise<AdminPilatesClass[]> {
-  if (!supabase) throw new Error("Supabase no está configurado.");
+  if (!supabase) throw new Error("El servicio de clases no está disponible.");
   const { data, error } = await supabase
     .from("classes")
     .select("id,title,description,category,level,duration_minutes,published,created_at")
     .order("created_at", { ascending: false })
     .limit(20);
-  if (error) throw error;
+  if (error) throw new Error("No pudimos cargar las clases.");
   return (data ?? []).map((item) => ({
     id: item.id,
     title: item.title,
@@ -76,15 +76,18 @@ export async function listAdminClasses(): Promise<AdminPilatesClass[]> {
 export async function countClasses(): Promise<number> {
   if (!supabase) return 0;
   const { count, error } = await supabase.from("classes").select("id", { count: "exact", head: true });
-  if (error) throw error;
+  if (error) throw new Error("No pudimos contar las clases.");
   return count ?? 0;
 }
 
 export async function createClass(input: NewPilatesClass): Promise<string> {
-  if (!isSupabaseConfigured || !supabase) throw new Error("Supabase no está configurado.");
+  if (!isSupabaseConfigured || !supabase) throw new Error("El servicio de clases no está disponible.");
 
   const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) throw new Error("Necesitás iniciar sesión como administradora.");
+  if (authError || !authData.user) {
+    window.location.replace("/alumnos?reason=expired");
+    throw new Error("Tu sesión terminó. Volvé a iniciar sesión.");
+  }
 
   const { data, error } = await supabase
     .from("classes")
@@ -107,7 +110,7 @@ export async function createClass(input: NewPilatesClass): Promise<string> {
     .select("id")
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error("No pudimos guardar la clase.");
 
   const groupIds = Array.from(new Set(input.groupIds ?? [])).filter(Boolean);
   if (groupIds.length > 0) {
@@ -116,7 +119,7 @@ export async function createClass(input: NewPilatesClass): Promise<string> {
       .insert(groupIds.map((groupId) => ({ class_id: data.id, group_id: groupId })));
     if (groupError) {
       await supabase.from("classes").delete().eq("id", data.id);
-      throw groupError;
+      throw new Error("No pudimos asignar los grupos; la clase no fue publicada.");
     }
   }
 
@@ -124,22 +127,40 @@ export async function createClass(input: NewPilatesClass): Promise<string> {
 }
 
 export async function setClassPublished(id: string, published: boolean): Promise<void> {
-  if (!supabase) throw new Error("Supabase no está configurado.");
+  if (!supabase) throw new Error("El servicio de clases no está disponible.");
   const { error } = await supabase.from("classes").update({ published }).eq("id", id);
-  if (error) throw error;
+  if (error) throw new Error("No pudimos cambiar la publicación de la clase.");
 }
 
 export async function getPlaybackUrl(classId: string): Promise<string> {
-  if (!supabase) throw new Error("Supabase no está configurado.");
+  if (!supabase) throw new Error("El servicio de video no está disponible.");
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token) throw new Error("La sesión expiró.");
+  if (!token) {
+    window.location.replace("/alumnos?reason=expired");
+    throw new Error("Tu sesión terminó. Volvé a iniciar sesión.");
+  }
 
   const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/playback`, {
     headers: { authorization: `Bearer ${token}` },
     cache: "no-store"
   });
   const payload = await response.json().catch(() => ({})) as { url?: string; error?: string };
+
+  if (response.status === 401) {
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    window.location.replace("/alumnos?reason=expired");
+    throw new Error("Tu sesión terminó. Volvé a iniciar sesión.");
+  }
+
+  if (response.status === 403 || response.status === 404) {
+    throw new Error("Esta clase no está disponible para tu cuenta.");
+  }
+
+  if (response.status === 503) {
+    throw new Error("El servicio de video no está disponible en este momento.");
+  }
+
   if (!response.ok || !payload.url) throw new Error(payload.error ?? "No pudimos abrir el video.");
   return payload.url;
 }

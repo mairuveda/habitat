@@ -6,8 +6,8 @@ export default function LogoutButton({ className = "logout" }: { className?: str
 
   async function logout() {
     setLoading(true);
-    await signOut();
-    window.location.href = "/alumnos";
+    await signOut().catch(() => undefined);
+    window.location.replace("/alumnos");
   }
 
   return (
