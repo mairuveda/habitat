@@ -91,3 +91,38 @@
   .service-row { grid-template-columns: 12px 1fr; }
   .service-row > .status-pill { grid-column: 2; }
 }
+
+.account-settings-grid { align-items: start; }
+.account-details { display: grid; margin: 14px 0 16px; }
+.account-details > div { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0e3d5; }
+.account-details dt { color: var(--habitat-muted); font-size: .76rem; }
+.account-details dd { margin: 0; font-weight: 700; font-size: .86rem; }
+.text-action { color: var(--habitat-orange-strong); font-weight: 700; font-size: .82rem; }
+.password-form { display: grid; gap: 10px; margin-top: 14px; }
+.password-form label { display: grid; gap: 5px; font-size: .78rem; font-weight: 700; }
+.password-form input { width: 100%; min-height: 40px; border: 1px solid var(--habitat-border); border-radius: 8px; padding: 8px 10px; background: #fff; color: var(--habitat-chocolate); }
+.password-form .button { justify-self: start; margin-top: 2px; }
+.settings-inline-status { margin-top: 10px !important; padding: 9px 11px; background: #fff2d8; border-radius: 8px; color: #6b442a !important; }
+.system-status-panel { margin-top: 14px; }
+.system-status-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.service-list-horizontal { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.compact-service-row { border: 1px solid var(--habitat-border); border-radius: 9px; padding: 12px; background: #fff; grid-template-columns: 12px 1fr auto; }
+.compact-service-row:last-child { border-bottom: 1px solid var(--habitat-border); }
+.technical-diagnostics { margin-top: 14px; border-top: 1px solid #f0e3d5; padding-top: 12px; }
+.technical-diagnostics summary { cursor: pointer; color: var(--habitat-muted); font-size: .8rem; font-weight: 700; }
+.diagnostic-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.diagnostic-grid > div { display: grid; gap: 3px; padding: 10px; border-radius: 8px; background: #f8efe5; }
+.diagnostic-grid span { color: var(--habitat-muted); font-size: .7rem; }
+.diagnostic-grid strong { font-size: .8rem; }
+.technical-diagnostics code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+@media (max-width: 900px) {
+  .service-list-horizontal { grid-template-columns: 1fr; }
+  .diagnostic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .account-details > div { grid-template-columns: 1fr; gap: 3px; }
+  .system-status-heading { align-items: flex-start; flex-direction: column; }
+  .diagnostic-grid { grid-template-columns: 1fr; }
+}

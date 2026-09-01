@@ -15,7 +15,7 @@ const studentRoutes = [
   "src/pages/alumnos/clases.astro"
 ];
 
-test("admin navigation has real pages", () => {
+test("admin navigation has real pages and stays inside the authenticated shell", () => {
   for (const route of adminRoutes) assert.equal(existsSync(route), true, `${route} should exist`);
 
   const source = readFileSync("src/components/admin/AdminApp.tsx", "utf8");
@@ -24,14 +24,27 @@ test("admin navigation has real pages", () => {
   assert.match(source, /\/admin\/grupos/);
   assert.match(source, /\/admin\/clases/);
   assert.match(source, /\/admin\/ajustes/);
+  assert.match(source, /window\.history\.pushState/);
+  assert.match(source, /href="\/admin"[\s\S]*className="brand"/);
 });
 
-test("student navigation exposes only implemented pages", () => {
+test("student navigation exposes only implemented pages and keeps the portal logo internal", () => {
   for (const route of studentRoutes) assert.equal(existsSync(route), true, `${route} should exist`);
 
   const source = readFileSync("src/components/student/StudentApp.tsx", "utf8");
   assert.doesNotMatch(source, /href=["']#["']/);
   assert.match(source, /\/alumnos\/dashboard/);
   assert.match(source, /\/alumnos\/clases/);
+  assert.match(source, /window\.history\.pushState/);
+  assert.match(source, /href="\/alumnos\/dashboard"/);
   assert.doesNotMatch(source, /Favoritos|Mi progreso|Mensajes/);
+});
+
+test("admin settings are user-facing and keep technical details secondary", () => {
+  const source = readFileSync("src/components/admin/AdminSettings.tsx", "utf8");
+  assert.match(source, /Mi cuenta/);
+  assert.match(source, /Seguridad/);
+  assert.match(source, /Actualizar contraseña/);
+  assert.match(source, /Estado del sistema/);
+  assert.match(source, /Diagnóstico técnico/);
 });
