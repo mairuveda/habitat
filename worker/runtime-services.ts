@@ -9,6 +9,8 @@ export interface RuntimeEnv {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   CLOUDINARY_CLOUD_NAME?: string;
   PUBLIC_CLOUDINARY_CLOUD_NAME?: string;
+  CLOUDINARY_API_KEY?: string;
+  PUBLIC_CLOUDINARY_API_KEY?: string;
   CLOUDINARY_API_SECRET?: string;
   CLOUDINARY_UPLOAD_PRESET?: string;
   PUBLIC_CLOUDINARY_UPLOAD_PRESET?: string;
@@ -32,6 +34,10 @@ export function getAdminKey(env: RuntimeEnv): string | null {
 
 export function getCloudName(env: RuntimeEnv): string | null {
   return env.CLOUDINARY_CLOUD_NAME ?? env.PUBLIC_CLOUDINARY_CLOUD_NAME ?? null;
+}
+
+export function getCloudinaryApiKey(env: RuntimeEnv): string | null {
+  return env.CLOUDINARY_API_KEY ?? env.PUBLIC_CLOUDINARY_API_KEY ?? null;
 }
 
 export function getCloudinaryPreset(env: RuntimeEnv): string | null {

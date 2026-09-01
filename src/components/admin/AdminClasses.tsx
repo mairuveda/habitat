@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { listGroups, type StudioGroup } from "@/lib/admin/students";
 import {
+  deleteClassAndVideo,
   listAdminClasses,
   setClassPublished,
   type AdminPilatesClass
@@ -13,6 +14,8 @@ export default function AdminClasses() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AdminPilatesClass | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -46,10 +49,34 @@ export default function AdminClasses() {
     }
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return;
+
+    const target = deleteTarget;
+    setDeleting(true);
+    setStatus(null);
+
+    try {
+      const result = await deleteClassAndVideo(target.id);
+      setClasses((current) => current.filter((item) => item.id !== target.id));
+      setDeleteTarget(null);
+      setStatus(
+        result.video === "missing"
+          ? `“${target.title}” fue eliminada. El video ya no existía en Cloudinary.`
+          : `“${target.title}” y su video fueron eliminados correctamente.`
+      );
+    } catch (error) {
+      setDeleteTarget(null);
+      setStatus(error instanceof Error ? error.message : "No pudimos eliminar la clase.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <main className="admin-main">
       <div className="admin-title">
-        <div><h1>Clases</h1><p>Subí videos, publicá contenido y pausá clases sin eliminarlo.</p></div>
+        <div><h1>Clases</h1><p>Subí videos, publicá contenido, pausá o eliminá clases.</p></div>
         <button className="button" type="button" onClick={() => setDialogOpen(true)}>
           + Nueva clase
         </button>
@@ -73,19 +100,32 @@ export default function AdminClasses() {
             {classes.map((item) => (
               <article className="class-management-row" key={item.id}>
                 <img src={item.image} alt="" />
+
                 <div className="class-management-body">
                   <strong>{item.title}</strong>
                   <small>{item.duration || "—"} min · {item.category} · {item.level}</small>
                   {item.description && <p>{item.description}</p>}
                 </div>
 
-                <button
-                  className={item.published ? "publish-toggle on" : "publish-toggle"}
-                  type="button"
-                  onClick={() => void toggleClass(item)}
-                >
-                  {item.published ? "Publicada" : "Pausada"}
-                </button>
+                <div className="class-management-actions">
+                  <button
+                    className={item.published ? "publish-toggle on" : "publish-toggle"}
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void toggleClass(item)}
+                  >
+                    {item.published ? "Publicada" : "Pausada"}
+                  </button>
+
+                  <button
+                    className="delete-class-button"
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => setDeleteTarget(item)}
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </article>
             ))}
 
@@ -103,6 +143,60 @@ export default function AdminClasses() {
           onCreated={refresh}
           onStatus={setStatus}
         />
+      )}
+
+      {deleteTarget && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            if (!deleting) setDeleteTarget(null);
+          }}
+        >
+          <div
+            className="admin-modal small delete-class-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-class-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              type="button"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+            >
+              ×
+            </button>
+
+            <h2 id="delete-class-title">Eliminar clase</h2>
+            <p>Esta acción elimina la clase y también su video de Cloudinary.</p>
+
+            <div className="delete-class-warning">
+              <strong>{deleteTarget.title}</strong>
+              <span>La eliminación es permanente y no se puede deshacer.</span>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="button secondary"
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancelar
+              </button>
+
+              <button
+                className="button danger"
+                type="button"
+                disabled={deleting}
+                onClick={() => void confirmDelete()}
+              >
+                {deleting ? "Eliminando…" : "Eliminar definitivamente"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

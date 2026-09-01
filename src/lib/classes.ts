@@ -140,6 +140,54 @@ export async function setClassPublished(id: string, published: boolean): Promise
   if (error) throw new Error("No pudimos cambiar la publicación de la clase.");
 }
 
+export async function deleteClassAndVideo(
+  classId: string
+): Promise<{ video: "deleted" | "missing" }> {
+  if (!supabase) throw new Error("El servicio de clases no está disponible.");
+
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    window.location.replace("/alumnos?reason=expired");
+    throw new Error("Tu sesión terminó. Volvé a iniciar sesión.");
+  }
+
+  const response = await fetch(`/api/admin/classes/${encodeURIComponent(classId)}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+    cache: "no-store"
+  });
+
+  const payload = await response.json().catch(() => ({})) as {
+    error?: string;
+    deleted?: { class?: boolean; video?: "deleted" | "missing" };
+  };
+
+  if (response.status === 401) {
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    window.location.replace("/alumnos?reason=expired");
+    throw new Error("Tu sesión terminó. Volvé a iniciar sesión.");
+  }
+
+  if (response.status === 403) {
+    throw new Error("Tu cuenta no tiene permisos para eliminar clases.");
+  }
+
+  if (response.status === 404) {
+    throw new Error("La clase ya no existe.");
+  }
+
+  if (response.status === 503) {
+    throw new Error("La eliminación de videos no está configurada en el servidor.");
+  }
+
+  if (!response.ok || !payload.deleted?.class || !payload.deleted.video) {
+    throw new Error(payload.error ?? "No pudimos eliminar la clase y su video.");
+  }
+
+  return { video: payload.deleted.video };
+}
+
 export async function getPlaybackUrl(classId: string): Promise<string> {
   if (!supabase) throw new Error("El servicio de video no está disponible.");
   const { data } = await supabase.auth.getSession();

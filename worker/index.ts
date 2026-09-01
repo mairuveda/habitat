@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   getAdminKey,
+  getCloudinaryApiKey,
   getCloudinaryPreset,
   getCloudName,
   getPublishableKey,
@@ -8,6 +9,11 @@ import {
   runtimeServices,
   type RuntimeEnv
 } from "./runtime-services";
+import {
+  cloudinaryDestroyParams,
+  cloudinaryDestroySucceeded,
+  cloudinarySignaturePayload
+} from "./cloudinary-delete";
 
 interface Env extends RuntimeEnv {
   ASSETS: Fetcher;
@@ -41,6 +47,19 @@ type PlaybackRow = {
   video_format: string | null;
   video_version: number | null;
   published: boolean;
+};
+
+type DeleteClassRow = {
+  id: string;
+  published: boolean;
+  video_provider: string;
+  video_ref: string;
+  video_delivery_type: "authenticated" | "upload" | "private" | null;
+};
+
+type CloudinaryDestroyResponse = {
+  result?: string;
+  error?: { message?: string };
 };
 
 function json(data: unknown, status = 200): Response {
@@ -216,6 +235,146 @@ async function signCloudinaryUpload(request: Request, env: Env): Promise<Respons
   return json({ signature });
 }
 
+async function destroyCloudinaryVideo(
+  env: Env,
+  row: DeleteClassRow
+): Promise<"deleted" | "missing"> {
+  const cloudName = getCloudName(env);
+  const apiKey = getCloudinaryApiKey(env);
+  const apiSecret = env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error("Cloudinary delete runtime incompleto.");
+  }
+
+  const params = cloudinaryDestroyParams(
+    row.video_ref,
+    row.video_delivery_type,
+    Math.floor(Date.now() / 1000)
+  );
+  const signature = await sha1Hex(`${cloudinarySignaturePayload(params)}${apiSecret}`);
+
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    body.set(key, String(value));
+  }
+  body.set("api_key", apiKey);
+  body.set("signature", signature);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/video/destroy`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: body.toString()
+    }
+  );
+
+  const payload = await response.json().catch(() => ({})) as CloudinaryDestroyResponse;
+
+  if (!response.ok) {
+    throw new Error(payload.error?.message ?? "Cloudinary rechazó la eliminación.");
+  }
+
+  if (!cloudinaryDestroySucceeded(payload.result)) {
+    throw new Error("Cloudinary no confirmó la eliminación del video.");
+  }
+
+  return payload.result === "ok" ? "deleted" : "missing";
+}
+
+async function deleteAdminClass(
+  request: Request,
+  env: Env,
+  classId: string
+): Promise<Response> {
+  const context = await requireAdmin(request, env);
+  if (context instanceof Response) return context;
+
+  const cloudName = getCloudName(env);
+  const apiKey = getCloudinaryApiKey(env);
+  if (!cloudName || !apiKey || !env.CLOUDINARY_API_SECRET) {
+    return json({ error: "La eliminación de videos no está configurada en el Worker." }, 503);
+  }
+
+  const { data, error } = await context.admin
+    .from("classes")
+    .select("id,published,video_provider,video_ref,video_delivery_type")
+    .eq("id", classId)
+    .maybeSingle();
+
+  if (error) return json({ error: "No pudimos leer la clase antes de eliminarla." }, 500);
+  if (!data) return json({ error: "La clase ya no existe." }, 404);
+
+  const row = data as DeleteClassRow;
+  if (row.video_provider !== "cloudinary") {
+    return json(
+      { error: "La eliminación coordinada sólo soporta videos de Cloudinary en esta versión." },
+      422
+    );
+  }
+
+  const wasPublished = row.published === true;
+  const { error: pauseError } = await context.admin
+    .from("classes")
+    .update({ published: false })
+    .eq("id", classId);
+
+  if (pauseError) {
+    return json({ error: "No pudimos asegurar la clase antes de eliminarla." }, 500);
+  }
+
+  let video: "deleted" | "missing";
+  try {
+    video = await destroyCloudinaryVideo(env, row);
+  } catch {
+    if (wasPublished) {
+      const { error: restoreError } = await context.admin
+        .from("classes")
+        .update({ published: true })
+        .eq("id", classId);
+
+      if (restoreError) {
+        return json(
+          {
+            error: "No pudimos eliminar el video y la clase quedó pausada. Revisá la configuración de Cloudinary.",
+            cleanupRequired: true
+          },
+          502
+        );
+      }
+    }
+
+    return json(
+      { error: "No pudimos eliminar el video de Cloudinary. La clase no fue eliminada." },
+      502
+    );
+  }
+
+  const { error: deleteError } = await context.admin
+    .from("classes")
+    .delete()
+    .eq("id", classId);
+
+  if (deleteError) {
+    return json(
+      {
+        error: "El video se eliminó de Cloudinary, pero no pudimos eliminar la clase. Quedó pausada; reintentá.",
+        cleanupRequired: true
+      },
+      500
+    );
+  }
+
+  return json({
+    ok: true,
+    deleted: {
+      class: true,
+      video
+    }
+  });
+}
+
 async function signedDeliveryUrl(env: Env, row: PlaybackRow): Promise<string> {
   const cloudName = getCloudName(env);
   if (!cloudName || !env.CLOUDINARY_API_SECRET) throw new Error("Cloudinary runtime incompleto.");
@@ -270,6 +429,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === "/api/admin/students" && request.method === "POST") return createStudent(request, env);
   if (url.pathname === "/api/cloudinary/sign" && request.method === "POST") return signCloudinaryUpload(request, env);
+
+  const adminClassMatch = url.pathname.match(/^\/api\/admin\/classes\/([0-9a-f-]{36})$/i);
+  if (adminClassMatch && request.method === "DELETE") {
+    return deleteAdminClass(request, env, adminClassMatch[1]);
+  }
 
   const match = url.pathname.match(/^\/api\/classes\/([0-9a-f-]{36})\/playback$/i);
   if (match && request.method === "GET") return playback(request, env, match[1]);

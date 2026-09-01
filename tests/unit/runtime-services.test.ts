@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runtimeServices } from "../../worker/runtime-services.ts";
+import { getCloudinaryApiKey, runtimeServices } from "../../worker/runtime-services.ts";
 
 const configuredRuntime = {
   SUPABASE_URL: "https://example.supabase.co",
@@ -41,4 +41,10 @@ test("runtime auth health requires a Supabase publishable key", () => {
 
   assert.equal(runtimeServices(withoutPublishableKey).auth, false);
   assert.equal(runtimeServices(withoutPublishableKey).admin, false);
+});
+
+test("Cloudinary delete API key prefers runtime and supports public fallback", () => {
+  assert.equal(getCloudinaryApiKey({ CLOUDINARY_API_KEY: "runtime-key" }), "runtime-key");
+  assert.equal(getCloudinaryApiKey({ PUBLIC_CLOUDINARY_API_KEY: "public-key" }), "public-key");
+  assert.equal(getCloudinaryApiKey({}), null);
 });

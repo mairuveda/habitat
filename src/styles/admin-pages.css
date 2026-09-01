@@ -126,3 +126,81 @@
   .system-status-heading { align-items: flex-start; flex-direction: column; }
   .diagnostic-grid { grid-template-columns: 1fr; }
 }
+
+.class-management-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.delete-class-button {
+  min-height: 34px;
+  border: 1px solid #b94b3e;
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: #fff;
+  color: #9e352a;
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.delete-class-button:hover {
+  background: #fff0ed;
+}
+
+.delete-class-button:disabled,
+.button.danger:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.delete-class-modal {
+  max-width: 460px;
+}
+
+.delete-class-warning {
+  display: grid;
+  gap: 5px;
+  margin: 14px 0 18px;
+  padding: 12px;
+  border: 1px solid #efd0ca;
+  border-radius: 9px;
+  background: #fff5f3;
+}
+
+.delete-class-warning span {
+  color: var(--habitat-muted);
+  font-size: .78rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.button.danger {
+  border-color: #9e352a;
+  background: #9e352a;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .class-management-row .class-management-actions {
+    grid-column: 2;
+    justify-self: start;
+    flex-wrap: wrap;
+  }
+
+  .modal-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .modal-actions .button {
+    width: 100%;
+  }
+}

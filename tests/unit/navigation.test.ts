@@ -77,3 +77,18 @@ test("admin settings are user-facing and keep technical details secondary", () =
   assert.match(source, /Estado del sistema/);
   assert.match(source, /Diagnóstico técnico/);
 });
+
+test("class deletion is coordinated through the admin Worker", () => {
+  const ui = readFileSync("src/components/admin/AdminClasses.tsx", "utf8");
+  const classes = readFileSync("src/lib/classes.ts", "utf8");
+  const worker = readFileSync("worker/index.ts", "utf8");
+
+  assert.match(ui, /Eliminar definitivamente/);
+  assert.match(ui, /deleteClassAndVideo/);
+  assert.match(classes, /method: "DELETE"/);
+  assert.match(classes, /\/api\/admin\/classes\//);
+  assert.match(worker, /async function deleteAdminClass/);
+  assert.match(worker, /requireAdmin/);
+  assert.match(worker, /destroyCloudinaryVideo/);
+  assert.match(worker, /\.from\("classes"\)[\s\S]*\.delete\(\)[\s\S]*\.eq\("id", classId\)/);
+});
