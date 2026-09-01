@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { listGroups, listStudents, type AdminStudent, type StudioGroup } from "@/lib/admin/students";
 import { countClasses, listAdminClasses, type AdminPilatesClass } from "@/lib/classes";
+import { NewClassDialog, NewGroupDialog, NewStudentDialog } from "./AdminCreateDialogs";
 
 type Props = {
   adminName: string;
@@ -13,6 +14,8 @@ type RuntimeServices = {
   video: boolean;
 };
 
+type QuickAction = "group" | "student" | "class" | null;
+
 export default function AdminDashboard({ adminName, routeNotice }: Props) {
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [groups, setGroups] = useState<StudioGroup[]>([]);
@@ -21,29 +24,30 @@ export default function AdminDashboard({ adminName, routeNotice }: Props) {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const [services, setServices] = useState<RuntimeServices | null>(null);
+  const [quickAction, setQuickAction] = useState<QuickAction>(null);
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const [studentData, groupData, classData, classesCount] = await Promise.all([
+        listStudents(),
+        listGroups(),
+        listAdminClasses(),
+        countClasses()
+      ]);
+      setStudents(studentData);
+      setGroups(groupData);
+      setClasses(classData);
+      setClassCount(classesCount);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "No pudimos cargar el dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
-
-    async function load() {
-      try {
-        const [studentData, groupData, classData, classesCount] = await Promise.all([
-          listStudents(),
-          listGroups(),
-          listAdminClasses(),
-          countClasses()
-        ]);
-        if (cancelled) return;
-        setStudents(studentData);
-        setGroups(groupData);
-        setClasses(classData);
-        setClassCount(classesCount);
-      } catch (error) {
-        if (!cancelled) setStatus(error instanceof Error ? error.message : "No pudimos cargar el dashboard.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
 
     async function loadRuntime() {
       try {
@@ -56,7 +60,7 @@ export default function AdminDashboard({ adminName, routeNotice }: Props) {
       }
     }
 
-    void load();
+    void refresh();
     void loadRuntime();
     return () => { cancelled = true; };
   }, []);
@@ -75,10 +79,17 @@ export default function AdminDashboard({ adminName, routeNotice }: Props) {
           <h1>Dashboard</h1>
           <p>Hola {adminName || "administradora"}. Resumen operativo del estudio.</p>
         </div>
+
         <div className="title-actions">
-          <a className="button secondary" href="/admin/grupos">+ Grupo</a>
-          <a className="button secondary" href="/admin/alumnas">+ Alumna</a>
-          <a className="button" href="/admin/clases">+ Nueva clase</a>
+          <button className="button secondary" type="button" onClick={() => setQuickAction("group")}>
+            + Grupo
+          </button>
+          <button className="button secondary" type="button" onClick={() => setQuickAction("student")}>
+            + Alumna
+          </button>
+          <button className="button" type="button" onClick={() => setQuickAction("class")}>
+            + Nueva clase
+          </button>
         </div>
       </div>
 
@@ -98,36 +109,80 @@ export default function AdminDashboard({ adminName, routeNotice }: Props) {
           <div className="panel-heading compact">
             <div><h2>Alumnas recientes</h2><p>Estado y grupo actual.</p></div>
           </div>
+
           {loading ? <p className="empty-admin">Cargando…</p> : (
             <div className="student-table">
-              <div className="student-row student-head"><span>Alumna</span><span>Grupo</span><span>Estado</span><span></span></div>
+              <div className="student-row student-head">
+                <span>Alumna</span><span>Grupo</span><span>Estado</span><span></span>
+              </div>
+
               {recentStudents.map((student) => (
                 <div className="student-row" key={student.id}>
-                  <div><strong>{student.full_name || "Sin nombre"}</strong><small>{student.email}</small></div>
+                  <div>
+                    <strong>{student.full_name || "Sin nombre"}</strong>
+                    <small>{student.email}</small>
+                  </div>
                   <span>{student.group_name ?? "Sin grupo"}</span>
-                  <span className={student.active ? "status-pill active" : "status-pill"}>{student.active ? "Activa" : "Suspendida"}</span>
-                  <a className="link-button" href="/admin/alumnas">Gestionar</a>
+                  <span className={student.active ? "status-pill active" : "status-pill"}>
+                    {student.active ? "Activa" : "Suspendida"}
+                  </span>
+                  <span aria-hidden="true"></span>
                 </div>
               ))}
+
               {recentStudents.length === 0 && <p className="empty-admin">Todavía no hay alumnas.</p>}
             </div>
           )}
         </section>
 
         <section className="panel classes-panel">
-          <div className="panel-heading compact"><div><h2>Clases recientes</h2><p>Publicadas y pausadas.</p></div></div>
+          <div className="panel-heading compact">
+            <div><h2>Clases recientes</h2><p>Publicadas y pausadas.</p></div>
+          </div>
+
           <div className="class-admin-list">
             {recentClasses.map((item) => (
               <div className="class-admin-row" key={item.id}>
                 <img src={item.image} alt="" />
-                <div><strong>{item.title}</strong><small>{item.duration || "—"} min · {item.category}</small></div>
-                <span className={item.published ? "status-pill active" : "status-pill"}>{item.published ? "Publicada" : "Pausada"}</span>
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>{item.duration || "—"} min · {item.category}</small>
+                </div>
+                <span className={item.published ? "status-pill active" : "status-pill"}>
+                  {item.published ? "Publicada" : "Pausada"}
+                </span>
               </div>
             ))}
             {!loading && recentClasses.length === 0 && <p className="empty-admin">Todavía no hay clases.</p>}
           </div>
         </section>
       </div>
+
+      {quickAction === "group" && (
+        <NewGroupDialog
+          onClose={() => setQuickAction(null)}
+          onCreated={refresh}
+          onStatus={setStatus}
+        />
+      )}
+
+      {quickAction === "student" && (
+        <NewStudentDialog
+          groups={groups}
+          onClose={() => setQuickAction(null)}
+          onCreated={refresh}
+          onStatus={setStatus}
+        />
+      )}
+
+      {quickAction === "class" && (
+        <NewClassDialog
+          groups={groups}
+          onClose={() => setQuickAction(null)}
+          onCreated={refresh}
+          onStatus={setStatus}
+        />
+      )}
     </main>
   );
 }

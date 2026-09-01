@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  createStudent,
   listGroups,
   listStudents,
   setStudentActive,
@@ -8,6 +7,7 @@ import {
   type AdminStudent,
   type StudioGroup
 } from "@/lib/admin/students";
+import { NewStudentDialog } from "./AdminCreateDialogs";
 
 export default function AdminStudents() {
   const [students, setStudents] = useState<AdminStudent[]>([]);
@@ -16,7 +16,6 @@ export default function AdminStudents() {
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -35,40 +34,23 @@ export default function AdminStudents() {
 
   const activeCount = useMemo(() => students.filter((student) => student.active).length, [students]);
   const withoutGroupCount = useMemo(() => students.filter((student) => !student.group_id).length, [students]);
+
   const filteredStudents = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return students;
-    return students.filter((student) => `${student.full_name} ${student.email} ${student.group_name ?? ""}`.toLowerCase().includes(term));
+    return students.filter((student) =>
+      `${student.full_name} ${student.email} ${student.group_name ?? ""}`.toLowerCase().includes(term)
+    );
   }, [students, search]);
-
-  async function submitStudent(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus(null);
-    setTemporaryPassword(null);
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-
-    try {
-      const result = await createStudent({
-        fullName: String(form.get("fullName") ?? ""),
-        email: String(form.get("email") ?? ""),
-        password: String(form.get("password") ?? "") || undefined,
-        groupId: String(form.get("groupId") ?? "") || null
-      });
-      formElement.reset();
-      setTemporaryPassword(result.temporaryPassword ?? null);
-      await refresh();
-      if (!result.temporaryPassword) setDialogOpen(false);
-      setStatus("Alumna creada correctamente.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "No pudimos crear la alumna.");
-    }
-  }
 
   async function toggleStudent(student: AdminStudent) {
     try {
       await setStudentActive(student.id, !student.active);
-      setStudents((current) => current.map((item) => item.id === student.id ? { ...item, active: !student.active } : item));
+      setStudents((current) =>
+        current.map((item) =>
+          item.id === student.id ? { ...item, active: !student.active } : item
+        )
+      );
       setStatus(student.active ? "Alumna suspendida." : "Alumna activada.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No pudimos cambiar el estado.");
@@ -79,12 +61,24 @@ export default function AdminStudents() {
     try {
       await setStudentGroup(student.id, groupId || null);
       const group = groups.find((item) => item.id === groupId);
-      setStudents((current) => current.map((item) => item.id === student.id ? {
-        ...item,
-        group_id: group?.id ?? null,
-        group_name: group?.name ?? null
-      } : item));
-      setStatus(group ? `${student.full_name || "La alumna"} ahora pertenece a ${group.name}.` : "La alumna quedó sin grupo.");
+
+      setStudents((current) =>
+        current.map((item) =>
+          item.id === student.id
+            ? {
+                ...item,
+                group_id: group?.id ?? null,
+                group_name: group?.name ?? null
+              }
+            : item
+        )
+      );
+
+      setStatus(
+        group
+          ? `${student.full_name || "La alumna"} ahora pertenece a ${group.name}.`
+          : "La alumna quedó sin grupo."
+      );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No pudimos asignar el grupo.");
     }
@@ -94,7 +88,9 @@ export default function AdminStudents() {
     <main className="admin-main">
       <div className="admin-title">
         <div><h1>Alumnas</h1><p>Altas, estado y asignación a grupos.</p></div>
-        <button className="button" type="button" onClick={() => { setTemporaryPassword(null); setDialogOpen(true); }}>+ Nueva alumna</button>
+        <button className="button" type="button" onClick={() => setDialogOpen(true)}>
+          + Nueva alumna
+        </button>
       </div>
 
       <div className="stats stats-three">
@@ -108,48 +104,59 @@ export default function AdminStudents() {
       <section className="panel">
         <div className="panel-heading">
           <div><h2>Listado</h2><p>Una alumna puede pertenecer como máximo a un grupo.</p></div>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, email o grupo…" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por nombre, email o grupo…"
+          />
         </div>
 
         {loading ? <p className="empty-admin">Cargando…</p> : (
           <div className="student-table">
-            <div className="student-row student-head"><span>Alumna</span><span>Grupo</span><span>Estado</span><span></span></div>
+            <div className="student-row student-head">
+              <span>Alumna</span><span>Grupo</span><span>Estado</span><span></span>
+            </div>
+
             {filteredStudents.map((student) => (
               <div className="student-row" key={student.id}>
-                <div><strong>{student.full_name || "Sin nombre"}</strong><small>{student.email}</small></div>
-                <select aria-label={`Grupo de ${student.full_name}`} value={student.group_id ?? ""} onChange={(event) => void changeGroup(student, event.target.value)}>
+                <div>
+                  <strong>{student.full_name || "Sin nombre"}</strong>
+                  <small>{student.email}</small>
+                </div>
+
+                <select
+                  aria-label={`Grupo de ${student.full_name}`}
+                  value={student.group_id ?? ""}
+                  onChange={(event) => void changeGroup(student, event.target.value)}
+                >
                   <option value="">Sin grupo</option>
-                  {groups.filter((group) => group.active).map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}
+                  {groups.filter((group) => group.active).map((group) => (
+                    <option value={group.id} key={group.id}>{group.name}</option>
+                  ))}
                 </select>
-                <span className={student.active ? "status-pill active" : "status-pill"}>{student.active ? "Activa" : "Suspendida"}</span>
-                <button className="link-button" type="button" onClick={() => void toggleStudent(student)}>{student.active ? "Suspender" : "Activar"}</button>
+
+                <span className={student.active ? "status-pill active" : "status-pill"}>
+                  {student.active ? "Activa" : "Suspendida"}
+                </span>
+
+                <button className="link-button" type="button" onClick={() => void toggleStudent(student)}>
+                  {student.active ? "Suspender" : "Activar"}
+                </button>
               </div>
             ))}
+
             {filteredStudents.length === 0 && <p className="empty-admin">No encontramos alumnas.</p>}
           </div>
         )}
       </section>
 
       {dialogOpen && (
-        <div className="modal-backdrop" onClick={() => setDialogOpen(false)}>
-          <form className="admin-modal" onSubmit={submitStudent} onClick={(event) => event.stopPropagation()}>
-            <button className="modal-close" type="button" onClick={() => setDialogOpen(false)}>×</button>
-            <h2>Nueva alumna</h2>
-            <p>Si dejás la contraseña vacía, generamos una temporal para copiar y enviar.</p>
-            <label>Nombre completo<input name="fullName" required /></label>
-            <label>Email<input name="email" type="email" required /></label>
-            <label>Grupo<select name="groupId"><option value="">Sin grupo</option>{groups.filter((group) => group.active).map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>
-            <label>Contraseña temporal<input name="password" type="text" minLength={8} placeholder="Opcional" /></label>
-            <button className="button full" type="submit">Crear alumna</button>
-            {temporaryPassword && (
-              <div className="temporary-password">
-                <span>Contraseña generada</span>
-                <strong>{temporaryPassword}</strong>
-                <button type="button" onClick={() => void navigator.clipboard.writeText(temporaryPassword)}>Copiar</button>
-              </div>
-            )}
-          </form>
-        </div>
+        <NewStudentDialog
+          groups={groups}
+          onClose={() => setDialogOpen(false)}
+          onCreated={refresh}
+          onStatus={setStatus}
+        />
       )}
     </main>
   );
