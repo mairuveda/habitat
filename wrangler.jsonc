@@ -12,5 +12,6 @@
     "run_worker_first": ["/api/*"],
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page"
-  }
+  },
+  "keep_vars": true
 }
