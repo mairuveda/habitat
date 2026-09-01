@@ -132,13 +132,6 @@ export async function setStudentGroup(profileId: string, groupId: string | null)
 
   const { error: insertError } = await supabase
     .from("group_members")
-    .upsert({ profile_id: profileId, group_id: groupId }, { onConflict: "profile_id,group_id" });
+    .upsert({ profile_id: profileId, group_id: groupId }, { onConflict: "profile_id" });
   if (insertError) throw new Error("No pudimos asignar el grupo.");
-
-  const { error: cleanupError } = await supabase
-    .from("group_members")
-    .delete()
-    .eq("profile_id", profileId)
-    .neq("group_id", groupId);
-  if (cleanupError) throw new Error("El grupo se asignó, pero no pudimos limpiar la asignación anterior.");
 }

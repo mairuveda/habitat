@@ -104,7 +104,7 @@ export async function createClass(input: NewPilatesClass): Promise<string> {
       video_version: input.videoVersion ?? null,
       playback_url: null,
       thumbnail_url: null,
-      published: input.published ?? true,
+      published: false,
       created_by: authData.user.id
     })
     .select("id")
@@ -121,6 +121,14 @@ export async function createClass(input: NewPilatesClass): Promise<string> {
       await supabase.from("classes").delete().eq("id", data.id);
       throw new Error("No pudimos asignar los grupos; la clase no fue publicada.");
     }
+  }
+
+  if (input.published ?? true) {
+    const { error: publishError } = await supabase
+      .from("classes")
+      .update({ published: true })
+      .eq("id", data.id);
+    if (publishError) throw new Error("La clase quedó guardada como borrador, pero no pudimos publicarla.");
   }
 
   return data.id;

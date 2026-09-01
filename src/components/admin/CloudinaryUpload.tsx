@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getVideoUploadConfiguration } from "@/lib/browser-config";
 
 export type UploadResult = {
   public_id: string;
@@ -36,9 +37,10 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
   const apiKey = import.meta.env.PUBLIC_CLOUDINARY_API_KEY;
   const uploadPreset = import.meta.env.PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
-  const configurationError = !cloudName || !apiKey || !uploadPreset
-    ? "La carga de videos no está configurada. Revisá las variables públicas de Cloudinary en Cloudflare."
-    : null;
+  const videoUploadConfig = getVideoUploadConfiguration({ cloudName, apiKey, uploadPreset });
+  const configurationError = videoUploadConfig.configured
+    ? null
+    : `Falta configuración pública de Cloudinary: ${videoUploadConfig.missing.join(", ")}.`;
 
   useEffect(() => {
     if (configurationError) {

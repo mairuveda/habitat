@@ -1,6 +1,6 @@
 {
   "name": "habitat-pilates",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,12 +8,14 @@
     "build": "astro check && tsc -p tsconfig.worker.json --noEmit && astro build",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
-    "check": "astro check && tsc -p tsconfig.worker.json --noEmit"
+    "check": "astro check && tsc -p tsconfig.worker.json --noEmit",
+    "test": "node --experimental-strip-types --test tests/unit/*.test.ts",
+    "test:integration": "node --experimental-strip-types --test tests/integration/*.test.ts"
   },
   "dependencies": {
-    "@astrojs/react": "4.4.2",
+    "@astrojs/react": "6.0.5",
     "@supabase/supabase-js": "2.112.4",
-    "astro": "5.18.2",
+    "astro": "7.2.10",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "3.25.76"

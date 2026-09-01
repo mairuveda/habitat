@@ -1,20 +1,16 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  getAdminKey,
+  getCloudinaryPreset,
+  getCloudName,
+  getPublishableKey,
+  getSupabaseUrl,
+  runtimeServices,
+  type RuntimeEnv
+} from "./runtime-services";
 
-interface Env {
+interface Env extends RuntimeEnv {
   ASSETS: Fetcher;
-  SUPABASE_URL?: string;
-  PUBLIC_SUPABASE_URL?: string;
-  SUPABASE_PUBLISHABLE_KEY?: string;
-  PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
-  SUPABASE_ANON_KEY?: string;
-  PUBLIC_SUPABASE_ANON_KEY?: string;
-  SUPABASE_SECRET_KEY?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
-  CLOUDINARY_CLOUD_NAME?: string;
-  PUBLIC_CLOUDINARY_CLOUD_NAME?: string;
-  CLOUDINARY_API_SECRET?: string;
-  CLOUDINARY_UPLOAD_PRESET?: string;
-  PUBLIC_CLOUDINARY_UPLOAD_PRESET?: string;
 }
 
 type AuthContext = {
@@ -52,44 +48,6 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "cache-control": "no-store" }
   });
-}
-
-function getSupabaseUrl(env: Env): string | null {
-  return env.SUPABASE_URL ?? env.PUBLIC_SUPABASE_URL ?? null;
-}
-
-function getPublishableKey(env: Env): string | null {
-  return env.SUPABASE_PUBLISHABLE_KEY
-    ?? env.PUBLIC_SUPABASE_PUBLISHABLE_KEY
-    ?? env.SUPABASE_ANON_KEY
-    ?? env.PUBLIC_SUPABASE_ANON_KEY
-    ?? null;
-}
-
-function getAdminKey(env: Env): string | null {
-  return env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? null;
-}
-
-function getCloudName(env: Env): string | null {
-  return env.CLOUDINARY_CLOUD_NAME ?? env.PUBLIC_CLOUDINARY_CLOUD_NAME ?? null;
-}
-
-function getCloudinaryPreset(env: Env): string | null {
-  return env.CLOUDINARY_UPLOAD_PRESET ?? env.PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? null;
-}
-
-function runtimeServices(env: Env) {
-  const supabaseUrl = getSupabaseUrl(env);
-  const publishableKey = getPublishableKey(env);
-  const adminKey = getAdminKey(env);
-  const cloudName = getCloudName(env);
-  const uploadPreset = getCloudinaryPreset(env);
-
-  return {
-    auth: Boolean(supabaseUrl && publishableKey),
-    admin: Boolean(supabaseUrl && publishableKey && adminKey),
-    video: Boolean(cloudName && uploadPreset && env.CLOUDINARY_API_SECRET)
-  };
 }
 
 function createServerClient(url: string, key: string): SupabaseClient {
@@ -308,7 +266,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
   if (url.pathname === "/api/health" && request.method === "GET") {
-    return json({ ok: true, version: "0.4.0", services: runtimeServices(env) });
+    return json({ ok: true, version: "0.4.1", services: runtimeServices(env) });
   }
   if (url.pathname === "/api/admin/students" && request.method === "POST") return createStudent(request, env);
   if (url.pathname === "/api/cloudinary/sign" && request.method === "POST") return signCloudinaryUpload(request, env);
