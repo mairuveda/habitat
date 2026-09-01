@@ -11,7 +11,9 @@ type Props = {
 type RuntimeServices = {
   auth: boolean;
   admin: boolean;
-  video: boolean;
+  videoUpload: boolean;
+  videoPlayback: boolean;
+  videoDelete: boolean;
 };
 
 type QuickAction = "group" | "student" | "class" | null;
@@ -23,7 +25,7 @@ export default function AdminDashboard({ adminName, routeNotice }: Props) {
   const [classCount, setClassCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
-  const [services, setServices] = useState<RuntimeServices | null>(null);
+  const [runtimeReady, setRuntimeReady] = useState<boolean | null>(null);
   const [quickAction, setQuickAction] = useState<QuickAction>(null);
 
   async function refresh() {
@@ -51,12 +53,17 @@ export default function AdminDashboard({ adminName, routeNotice }: Props) {
 
     async function loadRuntime() {
       try {
-        const response = await fetch("/api/health", { cache: "no-store" });
-        if (!response.ok) return;
-        const payload = await response.json() as { services?: RuntimeServices };
-        if (!cancelled && payload.services) setServices(payload.services);
+        const response = await fetch("/api/ready", { cache: "no-store" });
+        const payload = await response.json().catch(() => ({})) as {
+          ready?: boolean;
+          services?: RuntimeServices;
+        };
+
+        if (!cancelled && typeof payload.ready === "boolean") {
+          setRuntimeReady(payload.ready);
+        }
       } catch {
-        // En `astro dev` el Worker no se ejecuta. La página Ajustes explica cómo probarlo.
+        if (!cancelled) setRuntimeReady(false);
       }
     }
 
@@ -68,7 +75,7 @@ export default function AdminDashboard({ adminName, routeNotice }: Props) {
   const activeCount = useMemo(() => students.filter((student) => student.active).length, [students]);
   const recentStudents = students.slice(0, 5);
   const recentClasses = classes.slice(0, 5);
-  const runtimeWarning = services && (!services.admin || !services.video)
+  const runtimeWarning = runtimeReady === false
     ? "Hay servicios runtime incompletos. Revisá Ajustes antes de publicar contenido."
     : null;
 

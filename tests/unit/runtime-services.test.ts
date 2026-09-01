@@ -1,49 +1,80 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getCloudinaryApiKey, runtimeServices } from "../../worker/runtime-services.ts";
+import {
+  getCloudinaryApiKey,
+  runtimeReadiness
+} from "../../worker/runtime-services.ts";
 
 const configuredRuntime = {
   SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_PUBLISHABLE_KEY: "publishable",
   SUPABASE_SECRET_KEY: "secret",
   CLOUDINARY_CLOUD_NAME: "demo",
+  CLOUDINARY_API_KEY: "cloudinary-key",
   CLOUDINARY_UPLOAD_PRESET: "habitat_private",
   CLOUDINARY_API_SECRET: "cloudinary-secret"
 };
 
-test("runtime health reports configured auth, admin and video services", () => {
-  assert.deepEqual(runtimeServices(configuredRuntime), {
-    auth: true,
-    admin: true,
-    video: true
+test("runtime readiness reports every required capability", () => {
+  assert.deepEqual(runtimeReadiness(configuredRuntime), {
+    ready: true,
+    services: {
+      auth: true,
+      admin: true,
+      videoUpload: true,
+      videoPlayback: true,
+      videoDelete: true
+    },
+    missing: []
   });
 });
 
-test("runtime video health requires Cloudinary API secret", () => {
-  const { CLOUDINARY_API_SECRET: _, ...withoutSecret } = configuredRuntime;
+test("missing Supabase admin key explains the upload 503 cause", () => {
+  const { SUPABASE_SECRET_KEY: _, ...env } = configuredRuntime;
+  const readiness = runtimeReadiness(env);
 
-  assert.equal(runtimeServices(withoutSecret).video, false);
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.services.auth, true);
+  assert.equal(readiness.services.admin, false);
+  assert.equal(readiness.services.videoUpload, false);
+  assert.equal(readiness.services.videoDelete, false);
+  assert.equal(readiness.services.videoPlayback, true);
+  assert.deepEqual(readiness.missing, [
+    "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY"
+  ]);
 });
 
-test("runtime video health does not depend on browser API key", () => {
-  assert.equal(runtimeServices(configuredRuntime).video, true);
+test("missing Cloudinary secret disables every video server capability", () => {
+  const { CLOUDINARY_API_SECRET: _, ...env } = configuredRuntime;
+  const readiness = runtimeReadiness(env);
+
+  assert.equal(readiness.services.videoUpload, false);
+  assert.equal(readiness.services.videoPlayback, false);
+  assert.equal(readiness.services.videoDelete, false);
+  assert.ok(readiness.missing.includes("CLOUDINARY_API_SECRET"));
 });
 
-test("runtime admin health requires a server-side admin key", () => {
-  const { SUPABASE_SECRET_KEY: _, ...withoutAdminKey } = configuredRuntime;
+test("missing Cloudinary API key keeps playback but disables upload and delete", () => {
+  const { CLOUDINARY_API_KEY: _, ...env } = configuredRuntime;
+  const readiness = runtimeReadiness(env);
 
-  assert.equal(runtimeServices(withoutAdminKey).admin, false);
-  assert.equal(runtimeServices(withoutAdminKey).auth, true);
+  assert.equal(readiness.services.videoPlayback, true);
+  assert.equal(readiness.services.videoUpload, false);
+  assert.equal(readiness.services.videoDelete, false);
+  assert.ok(readiness.missing.includes("CLOUDINARY_API_KEY"));
 });
 
-test("runtime auth health requires a Supabase publishable key", () => {
-  const { SUPABASE_PUBLISHABLE_KEY: _, ...withoutPublishableKey } = configuredRuntime;
+test("missing upload preset disables upload only", () => {
+  const { CLOUDINARY_UPLOAD_PRESET: _, ...env } = configuredRuntime;
+  const readiness = runtimeReadiness(env);
 
-  assert.equal(runtimeServices(withoutPublishableKey).auth, false);
-  assert.equal(runtimeServices(withoutPublishableKey).admin, false);
+  assert.equal(readiness.services.videoUpload, false);
+  assert.equal(readiness.services.videoPlayback, true);
+  assert.equal(readiness.services.videoDelete, true);
+  assert.ok(readiness.missing.includes("CLOUDINARY_UPLOAD_PRESET"));
 });
 
-test("Cloudinary delete API key prefers runtime and supports public fallback", () => {
+test("Cloudinary API key supports explicit runtime and public fallback", () => {
   assert.equal(getCloudinaryApiKey({ CLOUDINARY_API_KEY: "runtime-key" }), "runtime-key");
   assert.equal(getCloudinaryApiKey({ PUBLIC_CLOUDINARY_API_KEY: "public-key" }), "public-key");
   assert.equal(getCloudinaryApiKey({}), null);

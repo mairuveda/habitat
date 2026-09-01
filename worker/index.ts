@@ -6,7 +6,7 @@ import {
   getCloudName,
   getPublishableKey,
   getSupabaseUrl,
-  runtimeServices,
+  runtimeReadiness,
   type RuntimeEnv
 } from "./runtime-services";
 import {
@@ -111,7 +111,12 @@ async function requireAdmin(request: Request, env: Env): Promise<AdminContext | 
 
   const supabaseUrl = getSupabaseUrl(env);
   const secretKey = getAdminKey(env);
-  if (!supabaseUrl || !secretKey) return json({ error: "La administración de usuarios no está disponible." }, 503);
+  if (!supabaseUrl || !secretKey) {
+    return json({
+      error: "La administración de usuarios no está disponible.",
+      missing: ["SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY"]
+    }, 503);
+  }
 
   const admin = createServerClient(supabaseUrl, secretKey);
   const { data: profile, error: profileError } = await admin
@@ -206,8 +211,14 @@ async function signCloudinaryUpload(request: Request, env: Env): Promise<Respons
   const context = await requireAdmin(request, env);
   if (context instanceof Response) return context;
 
+  const readiness = runtimeReadiness(env);
   const uploadPreset = getCloudinaryPreset(env);
-  if (!env.CLOUDINARY_API_SECRET || !uploadPreset) return json({ error: "La carga de videos no está disponible." }, 503);
+  if (!readiness.services.videoUpload || !uploadPreset) {
+    return json({
+      error: "La carga de videos no está disponible.",
+      missing: readiness.missing.filter((name) => name.startsWith("CLOUDINARY"))
+    }, 503);
+  }
 
   const body = await request.json().catch(() => ({})) as SignBody;
   const params = body.paramsToSign;
@@ -291,10 +302,12 @@ async function deleteAdminClass(
   const context = await requireAdmin(request, env);
   if (context instanceof Response) return context;
 
-  const cloudName = getCloudName(env);
-  const apiKey = getCloudinaryApiKey(env);
-  if (!cloudName || !apiKey || !env.CLOUDINARY_API_SECRET) {
-    return json({ error: "La eliminación de videos no está configurada en el Worker." }, 503);
+  const readiness = runtimeReadiness(env);
+  if (!readiness.services.videoDelete) {
+    return json({
+      error: "La eliminación de videos no está configurada en el Worker.",
+      missing: readiness.missing.filter((name) => name.startsWith("CLOUDINARY"))
+    }, 503);
   }
 
   const { data, error } = await context.admin
@@ -425,7 +438,15 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
   if (url.pathname === "/api/health" && request.method === "GET") {
-    return json({ ok: true, version: "0.4.1", services: runtimeServices(env) });
+    return json({ ok: true, version: "0.4.1" });
+  }
+
+  if (url.pathname === "/api/ready" && request.method === "GET") {
+    const readiness = runtimeReadiness(env);
+    return json(
+      { version: "0.4.1", ...readiness },
+      readiness.ready ? 200 : 503
+    );
   }
   if (url.pathname === "/api/admin/students" && request.method === "POST") return createStudent(request, env);
   if (url.pathname === "/api/cloudinary/sign" && request.method === "POST") return signCloudinaryUpload(request, env);

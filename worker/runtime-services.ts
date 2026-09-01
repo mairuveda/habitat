@@ -16,6 +16,20 @@ export interface RuntimeEnv {
   PUBLIC_CLOUDINARY_UPLOAD_PRESET?: string;
 }
 
+export type RuntimeServices = {
+  auth: boolean;
+  admin: boolean;
+  videoUpload: boolean;
+  videoPlayback: boolean;
+  videoDelete: boolean;
+};
+
+export type RuntimeReadiness = {
+  ready: boolean;
+  services: RuntimeServices;
+  missing: string[];
+};
+
 export function getSupabaseUrl(env: RuntimeEnv): string | null {
   return env.SUPABASE_URL ?? env.PUBLIC_SUPABASE_URL ?? null;
 }
@@ -44,16 +58,56 @@ export function getCloudinaryPreset(env: RuntimeEnv): string | null {
   return env.CLOUDINARY_UPLOAD_PRESET ?? env.PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? null;
 }
 
-export function runtimeServices(env: RuntimeEnv) {
+export function runtimeReadiness(env: RuntimeEnv): RuntimeReadiness {
   const supabaseUrl = getSupabaseUrl(env);
   const publishableKey = getPublishableKey(env);
   const adminKey = getAdminKey(env);
   const cloudName = getCloudName(env);
-  const uploadPreset = getCloudinaryPreset(env);
+  const cloudinaryApiKey = getCloudinaryApiKey(env);
+  const cloudinaryPreset = getCloudinaryPreset(env);
+  const cloudinarySecret = env.CLOUDINARY_API_SECRET ?? null;
+
+  const missing: string[] = [];
+  if (!supabaseUrl) missing.push("SUPABASE_URL");
+  if (!publishableKey) missing.push("SUPABASE_PUBLISHABLE_KEY");
+  if (!adminKey) missing.push("SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY");
+  if (!cloudName) missing.push("CLOUDINARY_CLOUD_NAME");
+  if (!cloudinaryApiKey) missing.push("CLOUDINARY_API_KEY");
+  if (!cloudinaryPreset) missing.push("CLOUDINARY_UPLOAD_PRESET");
+  if (!cloudinarySecret) missing.push("CLOUDINARY_API_SECRET");
+
+  const auth = Boolean(supabaseUrl && publishableKey);
+  const admin = Boolean(auth && adminKey);
+  const videoPlayback = Boolean(auth && cloudName && cloudinarySecret);
+  const videoUpload = Boolean(
+    admin
+    && cloudName
+    && cloudinaryApiKey
+    && cloudinaryPreset
+    && cloudinarySecret
+  );
+  const videoDelete = Boolean(
+    admin
+    && cloudName
+    && cloudinaryApiKey
+    && cloudinarySecret
+  );
+
+  const services = {
+    auth,
+    admin,
+    videoUpload,
+    videoPlayback,
+    videoDelete
+  };
 
   return {
-    auth: Boolean(supabaseUrl && publishableKey),
-    admin: Boolean(supabaseUrl && publishableKey && adminKey),
-    video: Boolean(cloudName && uploadPreset && env.CLOUDINARY_API_SECRET)
+    ready: Object.values(services).every(Boolean),
+    services,
+    missing
   };
+}
+
+export function runtimeServices(env: RuntimeEnv): RuntimeServices {
+  return runtimeReadiness(env).services;
 }

@@ -10,26 +10,43 @@ type Props = {
 type RuntimeServices = {
   auth: boolean;
   admin: boolean;
-  video: boolean;
+  videoUpload: boolean;
+  videoPlayback: boolean;
+  videoDelete: boolean;
+};
+
+type RuntimeReadiness = {
+  ready: boolean;
+  services: RuntimeServices;
+  missing: string[];
 };
 
 type RuntimeState =
-  | { status: "loading"; services: null; message: null }
-  | { status: "ready"; services: RuntimeServices; message: null }
-  | { status: "unavailable"; services: null; message: string };
+  | { status: "loading"; readiness: null; message: null }
+  | { status: "checked"; readiness: RuntimeReadiness; message: string | null }
+  | { status: "unavailable"; readiness: null; message: string };
 
 function ServiceRow({ label, ok }: { label: string; ok: boolean | null }) {
   return (
     <div className="service-row compact-service-row">
-      <span className={ok === true ? "service-dot ok" : ok === false ? "service-dot error" : "service-dot"} aria-hidden="true" />
+      <span
+        className={ok === true ? "service-dot ok" : ok === false ? "service-dot error" : "service-dot"}
+        aria-hidden="true"
+      />
       <strong>{label}</strong>
-      <span className={ok === true ? "status-pill active" : "status-pill"}>{ok === null ? "Sin verificar" : ok ? "Operativo" : "Revisar"}</span>
+      <span className={ok === true ? "status-pill active" : "status-pill"}>
+        {ok === null ? "Sin verificar" : ok ? "Operativo" : "Revisar"}
+      </span>
     </div>
   );
 }
 
 export default function AdminSettings({ profile }: Props) {
-  const [runtime, setRuntime] = useState<RuntimeState>({ status: "loading", services: null, message: null });
+  const [runtime, setRuntime] = useState<RuntimeState>({
+    status: "loading",
+    readiness: null,
+    message: null
+  });
   const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
   const [savingPassword, setSavingPassword] = useState(false);
 
@@ -44,24 +61,50 @@ export default function AdminSettings({ profile }: Props) {
 
     async function checkRuntime() {
       try {
-        const response = await fetch("/api/health", { cache: "no-store" });
-        if (!response.ok) {
-          const message = response.status === 404
-            ? "El backend no está activo en esta ejecución local."
-            : `El backend respondió HTTP ${response.status}.`;
-          if (!cancelled) setRuntime({ status: "unavailable", services: null, message });
+        const response = await fetch("/api/ready", { cache: "no-store" });
+
+        if (response.status === 404) {
+          if (!cancelled) {
+            setRuntime({
+              status: "unavailable",
+              readiness: null,
+              message: "El backend no está activo en esta ejecución local."
+            });
+          }
           return;
         }
 
-        const payload = await response.json() as { services?: RuntimeServices };
-        if (!payload.services) {
-          if (!cancelled) setRuntime({ status: "unavailable", services: null, message: "No pudimos verificar el estado del sistema." });
+        const payload = await response.json().catch(() => ({})) as Partial<RuntimeReadiness>;
+        if (
+          typeof payload.ready !== "boolean"
+          || !payload.services
+          || !Array.isArray(payload.missing)
+        ) {
+          if (!cancelled) {
+            setRuntime({
+              status: "unavailable",
+              readiness: null,
+              message: "No pudimos verificar el estado del sistema."
+            });
+          }
           return;
         }
 
-        if (!cancelled) setRuntime({ status: "ready", services: payload.services, message: null });
+        if (!cancelled) {
+          setRuntime({
+            status: "checked",
+            readiness: payload as RuntimeReadiness,
+            message: response.ok ? null : "Hay configuración pendiente en el runtime."
+          });
+        }
       } catch {
-        if (!cancelled) setRuntime({ status: "unavailable", services: null, message: "No pudimos consultar el backend." });
+        if (!cancelled) {
+          setRuntime({
+            status: "unavailable",
+            readiness: null,
+            message: "No pudimos consultar el backend."
+          });
+        }
       }
     }
 
@@ -103,13 +146,17 @@ export default function AdminSettings({ profile }: Props) {
     }
   }
 
-  const services = runtime.status === "ready" ? runtime.services : null;
+  const readiness = runtime.status === "checked" ? runtime.readiness : null;
+  const services = readiness?.services ?? null;
+  const videosOk = Boolean(
+    services?.videoUpload
+    && services.videoPlayback
+    && services.videoDelete
+  );
   const systemOk = Boolean(
     isSupabaseConfigured
     && browserVideo.configured
-    && services?.auth
-    && services?.admin
-    && services?.video
+    && readiness?.ready
   );
 
   return (
@@ -120,7 +167,9 @@ export default function AdminSettings({ profile }: Props) {
 
       <div className="settings-grid account-settings-grid">
         <section className="panel settings-panel">
-          <div className="panel-heading compact"><div><h2>Mi cuenta</h2><p>Datos de la cuenta con la que administrás Hábitat.</p></div></div>
+          <div className="panel-heading compact">
+            <div><h2>Mi cuenta</h2><p>Datos de la cuenta con la que administrás Hábitat.</p></div>
+          </div>
           <dl className="account-details">
             <div><dt>Nombre</dt><dd>{profile.full_name || "Administradora"}</dd></div>
             <div><dt>Email</dt><dd>{profile.email}</dd></div>
@@ -130,11 +179,21 @@ export default function AdminSettings({ profile }: Props) {
         </section>
 
         <section className="panel settings-panel">
-          <div className="panel-heading compact"><div><h2>Seguridad</h2><p>Cambiá la contraseña de tu cuenta de administración.</p></div></div>
+          <div className="panel-heading compact">
+            <div><h2>Seguridad</h2><p>Cambiá la contraseña de tu cuenta de administración.</p></div>
+          </div>
           <form className="password-form" onSubmit={submitPassword}>
-            <label>Nueva contraseña<input name="password" type="password" minLength={8} autoComplete="new-password" required /></label>
-            <label>Repetir contraseña<input name="confirmation" type="password" minLength={8} autoComplete="new-password" required /></label>
-            <button className="button" type="submit" disabled={savingPassword}>{savingPassword ? "Guardando…" : "Actualizar contraseña"}</button>
+            <label>
+              Nueva contraseña
+              <input name="password" type="password" minLength={8} autoComplete="new-password" required />
+            </label>
+            <label>
+              Repetir contraseña
+              <input name="confirmation" type="password" minLength={8} autoComplete="new-password" required />
+            </label>
+            <button className="button" type="submit" disabled={savingPassword}>
+              {savingPassword ? "Guardando…" : "Actualizar contraseña"}
+            </button>
           </form>
           {passwordStatus && <p className="settings-inline-status" role="status">{passwordStatus}</p>}
         </section>
@@ -143,15 +202,17 @@ export default function AdminSettings({ profile }: Props) {
       <section className="panel system-status-panel">
         <div className="system-status-heading">
           <div><h2>Estado del sistema</h2><p>Comprobación rápida de los servicios que usa el portal.</p></div>
-          <span className={systemOk ? "status-pill active" : "status-pill"}>{systemOk ? "Todo operativo" : "Revisar"}</span>
+          <span className={systemOk ? "status-pill active" : "status-pill"}>
+            {systemOk ? "Todo operativo" : "Revisar"}
+          </span>
         </div>
 
-        {runtime.status === "unavailable" && <p className="admin-status" role="status">{runtime.message}</p>}
+        {runtime.message && <p className="admin-status" role="status">{runtime.message}</p>}
 
         <div className="service-list service-list-horizontal">
           <ServiceRow label="Cuenta y acceso" ok={services?.auth ?? null} />
           <ServiceRow label="Administración" ok={services?.admin ?? null} />
-          <ServiceRow label="Videos" ok={services?.video ?? null} />
+          <ServiceRow label="Videos" ok={services ? videosOk : null} />
         </div>
 
         <details className="technical-diagnostics">
@@ -159,11 +220,23 @@ export default function AdminSettings({ profile }: Props) {
           <div className="diagnostic-grid">
             <div><span>Supabase navegador</span><strong>{isSupabaseConfigured ? "OK" : "Pendiente"}</strong></div>
             <div><span>Cloudinary navegador</span><strong>{browserVideo.configured ? "OK" : "Pendiente"}</strong></div>
-            <div><span>Worker</span><strong>{runtime.status === "ready" ? "OK" : "No verificado"}</strong></div>
+            <div><span>Carga de video</span><strong>{services?.videoUpload ? "OK" : "Pendiente"}</strong></div>
+            <div><span>Reproducción</span><strong>{services?.videoPlayback ? "OK" : "Pendiente"}</strong></div>
+            <div><span>Eliminación</span><strong>{services?.videoDelete ? "OK" : "Pendiente"}</strong></div>
             <div><span>Versión</span><strong>0.4.1</strong></div>
           </div>
-          {!browserVideo.configured && <p>Configuración de video incompleta: {browserVideo.missing.join(", ")}.</p>}
-          {runtime.status === "unavailable" && <p>En desarrollo local, el backend `/api/*` se prueba con <code>pnpm preview</code>.</p>}
+
+          {!browserVideo.configured && (
+            <p>Configuración de video del navegador incompleta: {browserVideo.missing.join(", ")}.</p>
+          )}
+
+          {readiness && readiness.missing.length > 0 && (
+            <p>Configuración runtime pendiente: <code>{readiness.missing.join(", ")}</code>.</p>
+          )}
+
+          {runtime.status === "unavailable" && (
+            <p>El backend `/api/*` se prueba localmente con <code>pnpm preview</code>.</p>
+          )}
         </details>
       </section>
     </main>
