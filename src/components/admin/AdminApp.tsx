@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
 import LogoutButton from "@/components/auth/LogoutButton";
 import { useProtectedProfile } from "@/components/auth/useProtectedProfile";
+import AdminClasses from "./AdminClasses";
 import AdminDashboard from "./AdminDashboard";
+import AdminGroups from "./AdminGroups";
+import AdminSettings from "./AdminSettings";
+import AdminStudents from "./AdminStudents";
 
-const menu = ["Dashboard", "Alumnas", "Grupos", "Clases", "Ajustes"];
+export type AdminPage = "dashboard" | "students" | "groups" | "classes" | "settings";
 
-export default function AdminApp() {
+type Props = {
+  page?: AdminPage;
+};
+
+const menu: Array<{ page: AdminPage; label: string; href: string }> = [
+  { page: "dashboard", label: "Dashboard", href: "/admin" },
+  { page: "students", label: "Alumnas", href: "/admin/alumnas" },
+  { page: "groups", label: "Grupos", href: "/admin/grupos" },
+  { page: "classes", label: "Clases", href: "/admin/clases" },
+  { page: "settings", label: "Ajustes", href: "/admin/ajustes" }
+];
+
+export default function AdminApp({ page = "dashboard" }: Props) {
   const auth = useProtectedProfile(["admin"]);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -16,17 +32,33 @@ export default function AdminApp() {
     }
   }, []);
 
-  if (auth.status === "loading") return <div className="auth-loading">Validando acceso de administración…</div>;
-  if (auth.status === "error") return <div className="auth-loading auth-error">{auth.message}</div>;
+  if (auth.status === "loading") {
+    return <div className="auth-loading">Validando acceso de administración…</div>;
+  }
+
+  if (auth.status === "error") {
+    return <div className="auth-loading auth-error">{auth.message}</div>;
+  }
 
   return (
     <div className="admin-shell">
       <aside>
         <a href="/" className="brand"><img src="/brand/habitat-logo.png" alt="Hábitat" /></a>
-        <nav>{menu.map((item, index) => <a className={index === 0 ? "active" : ""} href="#" key={item}>{item}</a>)}</nav>
+        <nav>
+          {menu.map((item) => (
+            <a className={item.page === page ? "active" : ""} href={item.href} key={item.page}>
+              {item.label}
+            </a>
+          ))}
+        </nav>
         <LogoutButton />
       </aside>
-      <AdminDashboard adminName={auth.profile.full_name} routeNotice={notice} />
+
+      {page === "dashboard" && <AdminDashboard adminName={auth.profile.full_name} routeNotice={notice} />}
+      {page === "students" && <AdminStudents />}
+      {page === "groups" && <AdminGroups />}
+      {page === "classes" && <AdminClasses />}
+      {page === "settings" && <AdminSettings />}
     </div>
   );
 }

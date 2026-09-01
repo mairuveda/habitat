@@ -36,6 +36,7 @@ integrationTest("one student can keep at most one group membership", async () =>
     for (const name of [`TDD A ${suffix}`, `TDD B ${suffix}`]) {
       const { data, error } = await admin.from("groups").insert({ name }).select("id").single();
       assert.ifError(error);
+      assert.ok(data);
       groupIds.push(data.id);
     }
 
@@ -54,6 +55,7 @@ integrationTest("one student can keep at most one group membership", async () =>
       .select("profile_id,group_id")
       .eq("profile_id", userId);
     assert.ifError(membershipError);
+    assert.ok(memberships);
     assert.equal(memberships.length, 1);
     assert.equal(memberships[0].group_id, groupIds[1]);
   } finally {
@@ -90,6 +92,7 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
     for (const name of [`TDD RLS A ${suffix}`, `TDD RLS B ${suffix}`]) {
       const { data, error } = await admin.from("groups").insert({ name }).select("id").single();
       assert.ifError(error);
+      assert.ok(data);
       groupIds.push(data.id);
     }
 
@@ -134,6 +137,7 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
       .insert(classes)
       .select("id,title");
     assert.ifError(classError);
+    assert.ok(createdClasses);
     assert.equal(createdClasses.length, 3);
     classIds.push(...createdClasses.map((item) => item.id));
 
@@ -156,6 +160,7 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
         .select("title")
         .like("title", `TDD %${suffix}`);
       assert.ifError(error);
+      assert.ok(data);
       visibleTitles.push(data.map((item) => item.title));
     }
 
