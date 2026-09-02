@@ -2,14 +2,14 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import LoginForm from "@/components/auth/LoginForm";
 ---
-<BaseLayout title="Área alumnos · Hábitat" bodyClass="auth-page">
+<BaseLayout title="Ingresar · Hábitat" bodyClass="auth-page">
   <main class="auth-shell">
     <section class="brand-panel">
       <a href="/"><img src="/brand/habitat-logo.png" alt="Hábitat - Fluir en Movimiento" /></a>
       <p>Tu práctica también viaja con vos.</p>
     </section>
     <section class="login-card">
-      <a class="back" href="/">← Volver al sitio</a>
+      <a class="btn btn-secondary login-back" href="/">← Volver al inicio</a>
       <h1>Iniciar sesión</h1>
       <p>Accedé a tu espacio de bienestar.</p>
       <LoginForm client:load />
@@ -23,7 +23,13 @@ import LoginForm from "@/components/auth/LoginForm";
   .brand-panel img { width: min(430px, 80%); }
   .brand-panel p { font-family: var(--font-display); font-size: 1.6rem; margin-left: 70px; }
   .login-card { background: rgb(255 253 249 / .96); border: 1px solid var(--habitat-border); border-radius: 28px; padding: 40px; box-shadow: var(--habitat-shadow); }
-  .back { font-size: .85rem; color: var(--habitat-muted); }
+  .login-back {
+    display: inline-flex;
+    width: fit-content;
+    min-height: 38px;
+    padding: 8px 14px;
+    font-size: .82rem;
+  }
   .login-card h1 { margin: 24px 0 4px; font-size: 1.8rem; }
   .login-card > p { color: var(--habitat-muted); margin-top: 0; }
   .login-form { display: grid; gap: 15px; margin-top: 26px; }

@@ -92,3 +92,16 @@ test("class deletion is coordinated through the admin Worker", () => {
   assert.match(worker, /destroyCloudinaryVideo/);
   assert.match(worker, /\.from\("classes"\)[\s\S]*\.delete\(\)[\s\S]*\.eq\("id", classId\)/);
 });
+
+test("public navigation uses clear login wording and login exposes a visible home action", () => {
+  const header = readFileSync("src/components/Header.astro", "utf8");
+  const home = readFileSync("src/pages/index.astro", "utf8");
+  const login = readFileSync("src/pages/alumnos/index.astro", "utf8");
+
+  assert.doesNotMatch(header, /Área alumnos/);
+  assert.doesNotMatch(home, /Área alumnos/);
+  assert.match(header, />Ingresar<\/a>/);
+  assert.match(home, />Ingresar<\/a>/);
+  assert.match(login, /Volver al inicio/);
+  assert.match(login, /btn btn-secondary login-back/);
+});

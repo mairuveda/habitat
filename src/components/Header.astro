@@ -18,13 +18,13 @@ const links = [
     </nav>
     <div class="actions">
       <a class="btn btn-primary compact" href="#contacto">Reservar clase</a>
-      <a class="btn btn-secondary compact" href="/alumnos">Área alumnos</a>
+      <a class="btn btn-secondary compact" href="/alumnos">Ingresar</a>
     </div>
     <button class="menu" type="button" aria-label="Abrir menú" data-menu-button>☰</button>
   </div>
   <div class="mobile-nav" data-mobile-nav hidden>
     {links.map(([label, href]) => <a href={href}>{label}</a>)}
-    <a href="/alumnos">Área alumnos</a>
+    <a href="/alumnos">Ingresar</a>
   </div>
 </header>
 
