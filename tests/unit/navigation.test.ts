@@ -57,16 +57,19 @@ test("admin creation dialogs are shared by dashboard and management pages", () =
   assert.doesNotMatch(groups, /href="\/admin\/alumnas"/);
 });
 
-test("student navigation exposes only implemented pages and keeps the portal logo internal", () => {
+test("student portal has one canonical classes destination", () => {
   for (const route of studentRoutes) assert.equal(existsSync(route), true, `${route} should exist`);
 
   const source = readFileSync("src/components/student/StudentApp.tsx", "utf8");
-  assert.doesNotMatch(source, /href=["']#["']/);
-  assert.match(source, /\/alumnos\/dashboard/);
-  assert.match(source, /\/alumnos\/clases/);
-  assert.match(source, /window\.history\.pushState/);
-  assert.match(source, /href="\/alumnos\/dashboard"/);
-  assert.doesNotMatch(source, /Favoritos|Mi progreso|Mensajes/);
+  const login = readFileSync("src/components/auth/LoginForm.tsx", "utf8");
+  const protectedProfile = readFileSync("src/components/auth/useProtectedProfile.ts", "utf8");
+
+  assert.match(source, /href="\/alumnos\/clases"/);
+  assert.match(source, /replaceState\(\{\}, "", "\/alumnos\/clases"\)/);
+  assert.doesNotMatch(source, />Inicio<\/a>/);
+  assert.doesNotMatch(source, /currentPage|mode=/);
+  assert.match(login, /"\/alumnos\/clases"/);
+  assert.match(protectedProfile, /"\/alumnos\/clases"/);
 });
 
 test("admin settings are user-facing and keep technical details secondary", () => {
@@ -106,26 +109,21 @@ test("public navigation uses clear login wording and login exposes a visible hom
   assert.match(login, /btn btn-secondary login-back/);
 });
 
-test("student home is a summary and classes remains the full searchable library", () => {
-  const app = readFileSync("src/components/student/StudentApp.tsx", "utf8");
-  const library = readFileSync("src/components/student/ClassLibrary.tsx", "utf8");
-
-  assert.match(app, /mode={currentPage === "home" \? "summary" : "full"}/);
-  assert.match(app, /onViewAll={\(\) => goToPage\("classes", "\/alumnos\/clases"\)}/);
-
-  assert.match(library, /Clases disponibles para vos/);
-  assert.match(library, /Clases recientes/);
-  assert.match(library, /Ver todas las clases/);
-  assert.match(library, /Todas tus clases/);
-  assert.match(library, /Buscar clases/);
-});
-
-test("student class cards use generated class covers instead of fake thumbnails", () => {
+test("student class cards are concise and progressive controls avoid redundant UI", () => {
   const library = readFileSync("src/components/student/ClassLibrary.tsx", "utf8");
 
   assert.match(library, /className="class-cover"/);
   assert.match(library, /className="class-number"/);
-  assert.match(library, /Clase {numberLabel\(classNumber\)}/);
-  assert.match(library, /item\.description/);
+  assert.match(library, /className="class-description"/);
+  assert.match(library, /className="class-meta"/);
+  assert.match(library, /Ver clase →/);
+
+  assert.doesNotMatch(library, /Todas tus clases|Clases recientes|Clases disponibles para vos/);
+  assert.doesNotMatch(library, /<h3>{item\.title}<\/h3>/);
   assert.doesNotMatch(library, /<img src={item\.image}/);
+
+  assert.match(library, /const showSearch = items\.length >= 6/);
+  assert.match(library, /const showDurationFilter = durationBuckets\.short && durationBuckets\.long/);
+  assert.match(library, /const showLevelFilter = levels\.length > 1/);
+  assert.match(library, /const showCategoryFilter = categories\.length > 1/);
 });

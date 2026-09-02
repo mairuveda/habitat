@@ -5,11 +5,6 @@ import {
   type PilatesClass
 } from "@/lib/classes";
 
-type Props = {
-  mode?: "summary" | "full";
-  onViewAll?: () => void;
-};
-
 type ClassCardProps = {
   item: PilatesClass;
   classNumber: number;
@@ -20,9 +15,14 @@ function numberLabel(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-function ClassCard({ item, classNumber, onOpen }: ClassCardProps) {
-  const description = item.description.trim() || "Práctica disponible para tu cuenta.";
+function classDescription(item: PilatesClass): string {
+  const description = item.description.trim();
+  if (description) return description;
 
+  return "Práctica disponible para tu cuenta.";
+}
+
+function ClassCard({ item, classNumber, onOpen }: ClassCardProps) {
   return (
     <button
       className="class-card"
@@ -32,27 +32,24 @@ function ClassCard({ item, classNumber, onOpen }: ClassCardProps) {
     >
       <div className="class-cover">
         <span className="class-number">Clase {numberLabel(classNumber)}</span>
-
-        <div className="class-cover-meta">
-          <span>{item.category}</span>
-          <span>{item.duration || "—"} min</span>
-        </div>
       </div>
 
       <div className="class-body">
-        <h3>{item.title}</h3>
-        <p>{description}</p>
+        <p className="class-description">{classDescription(item)}</p>
 
-        <div className="class-card-footer">
-          <span>Nivel: {item.level}</span>
-          <strong>Ver clase →</strong>
+        <div className="class-meta">
+          <span>{item.duration || "—"} min</span>
+          <span>{item.level}</span>
+          <span>{item.category}</span>
         </div>
+
+        <strong className="class-open">Ver clase →</strong>
       </div>
     </button>
   );
 }
 
-export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
+export default function ClassLibrary() {
   const [items, setItems] = useState<PilatesClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [duration, setDuration] = useState("all");
@@ -97,11 +94,43 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
     [items]
   );
 
+  const levels = useMemo(
+    () => Array.from(
+      new Set(
+        items
+          .map((item) => item.level)
+          .filter((item) => item !== "Todos")
+      )
+    ),
+    [items]
+  );
+
+  const durationBuckets = useMemo(() => ({
+    short: items.some((item) => item.duration <= 25),
+    long: items.some((item) => item.duration > 25)
+  }), [items]);
+
+  const showSearch = items.length >= 6;
+  const showDurationFilter = durationBuckets.short && durationBuckets.long;
+  const showLevelFilter = levels.length > 1;
+  const showCategoryFilter = categories.length > 1;
+  const showToolbar = showSearch
+    || showDurationFilter
+    || showLevelFilter
+    || showCategoryFilter;
+
+  const hasActiveFilters = duration !== "all"
+    || level !== "all"
+    || category !== "all"
+    || search.trim() !== "";
+
   const visible = useMemo(
     () => items.filter((item) => {
       const durationOk = duration === "all"
         || (duration === "short" ? item.duration <= 25 : item.duration > 25);
-      const levelOk = level === "all" || item.level === level || item.level === "Todos";
+      const levelOk = level === "all"
+        || item.level === level
+        || item.level === "Todos";
       const categoryOk = category === "all" || item.category === category;
       const normalizedSearch = search.trim().toLowerCase();
       const searchOk = !normalizedSearch
@@ -113,8 +142,6 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
     }),
     [items, duration, level, category, search]
   );
-
-  const recent = items.slice(0, 3);
 
   async function openClass(item: PilatesClass) {
     setSelected(item);
@@ -151,65 +178,13 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
     : null;
 
   return (
-    <div className={mode === "summary" ? "library library-summary" : "library"}>
+    <div className="library">
       {status && <p className="library-status" role="status">{status}</p>}
 
-      {mode === "summary" ? (
-        <>
-          <section className="home-summary-card" aria-label="Resumen de clases">
-            <div>
-              <span>Clases disponibles para vos</span>
-              <strong>{loading ? "—" : items.length}</strong>
-            </div>
-            <p>
-              Accedé a las prácticas publicadas para tu grupo cuando quieras.
-            </p>
-          </section>
-
-          <section className="home-recent">
-            <div className="home-section-heading">
-              <div>
-                <h2>Clases recientes</h2>
-                <p>Las últimas prácticas que se sumaron a tu espacio.</p>
-              </div>
-
-              <button
-                className="view-all-classes"
-                type="button"
-                onClick={onViewAll}
-              >
-                Ver todas las clases
-              </button>
-            </div>
-
-            {loading ? (
-              <p className="empty">Cargando clases…</p>
-            ) : (
-              <>
-                <div className="class-cards">
-                  {recent.map((item) => (
-                    <ClassCard
-                      key={item.id}
-                      item={item}
-                      classNumber={classNumbers.get(item.id) ?? 1}
-                      onOpen={openClass}
-                    />
-                  ))}
-                </div>
-
-                {recent.length === 0 && (
-                  <p className="empty">
-                    Todavía no hay clases publicadas para tu grupo.
-                  </p>
-                )}
-              </>
-            )}
-          </section>
-        </>
-      ) : (
-        <>
-          <div className="library-toolbar">
-            <div className="filters">
+      {showToolbar && !loading && (
+        <div className="library-toolbar">
+          <div className="filters">
+            {showDurationFilter && (
               <select
                 aria-label="Duración"
                 value={duration}
@@ -219,17 +194,22 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
                 <option value="short">Hasta 25 min</option>
                 <option value="long">Más de 25 min</option>
               </select>
+            )}
 
+            {showLevelFilter && (
               <select
                 aria-label="Nivel"
                 value={level}
                 onChange={(event) => setLevel(event.target.value)}
               >
                 <option value="all">Nivel</option>
-                <option>Principiante</option>
-                <option>Intermedio</option>
+                {levels.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
               </select>
+            )}
 
+            {showCategoryFilter && (
               <select
                 aria-label="Categoría"
                 value={category}
@@ -240,12 +220,16 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
                   <option key={item}>{item}</option>
                 ))}
               </select>
+            )}
 
+            {hasActiveFilters && (
               <button type="button" onClick={clearFilters}>
-                Limpiar filtros
+                Limpiar
               </button>
-            </div>
+            )}
+          </div>
 
+          {showSearch && (
             <input
               className="search"
               value={search}
@@ -253,36 +237,31 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
               placeholder="Buscar clases..."
               aria-label="Buscar clases"
             />
+          )}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="empty">Cargando clases…</p>
+      ) : (
+        <>
+          <div className="class-cards">
+            {visible.map((item) => (
+              <ClassCard
+                key={item.id}
+                item={item}
+                classNumber={classNumbers.get(item.id) ?? 1}
+                onOpen={openClass}
+              />
+            ))}
           </div>
 
-          <div className="library-heading">
-            <h2>Todas tus clases</h2>
-            {!loading && (
-              <span>{visible.length} de {items.length}</span>
-            )}
-          </div>
-
-          {loading ? (
-            <p className="empty">Cargando clases…</p>
-          ) : (
-            <>
-              <div className="class-cards">
-                {visible.map((item) => (
-                  <ClassCard
-                    key={item.id}
-                    item={item}
-                    classNumber={classNumbers.get(item.id) ?? 1}
-                    onOpen={openClass}
-                  />
-                ))}
-              </div>
-
-              {visible.length === 0 && (
-                <p className="empty">
-                  No encontramos clases con esos filtros.
-                </p>
-              )}
-            </>
+          {visible.length === 0 && (
+            <p className="empty">
+              {items.length === 0
+                ? "Todavía no hay clases publicadas para tu grupo."
+                : "No encontramos clases con esos filtros."}
+            </p>
           )}
         </>
       )}
@@ -297,7 +276,7 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
             className="player-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={selected.title}
+            aria-label={`Clase ${selectedNumber ?? ""}`}
             onClick={(event) => event.stopPropagation()}
           >
             <button
@@ -334,11 +313,19 @@ export default function ClassLibrary({ mode = "full", onViewAll }: Props) {
 
             {selectedNumber && (
               <span className="player-class-number">
-                Clase {numberLabel(selectedNumber)} · {selected.category}
+                Clase {numberLabel(selectedNumber)}
               </span>
             )}
-            <h3>{selected.title}</h3>
-            <p>{selected.description}</p>
+
+            <p className="player-description">
+              {classDescription(selected)}
+            </p>
+
+            <div className="player-meta">
+              <span>{selected.duration || "—"} min</span>
+              <span>{selected.level}</span>
+              <span>{selected.category}</span>
+            </div>
           </section>
         </div>
       )}

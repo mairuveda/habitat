@@ -8,7 +8,7 @@ type State =
   | { status: "error"; profile: null; message: string };
 
 function routeForRole(role: UserRole, reason?: string): string {
-  const base = role === "admin" ? "/admin" : "/alumnos/dashboard";
+  const base = role === "admin" ? "/admin" : "/alumnos/clases";
   return reason ? `${base}?reason=${encodeURIComponent(reason)}` : base;
 }
 

@@ -71,7 +71,7 @@ export default function LoginForm() {
         return;
       }
 
-      window.location.replace(profile.role === "admin" ? "/admin" : "/alumnos/dashboard");
+      window.location.replace(profile.role === "admin" ? "/admin" : "/alumnos/clases");
     } catch (error) {
       await signOut().catch(() => undefined);
 
