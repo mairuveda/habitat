@@ -618,3 +618,455 @@
     height: 60px;
   }
 }
+/* ADMIN MOBILE V2
+ * The authenticated shell remains mounted. Mobile navigation is a drawer
+ * inside the same AdminApp, so route changes do not re-run auth.
+ */
+.admin-mobile-menu-button,
+.admin-mobile-scrim {
+  display: none;
+}
+
+.admin-main {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .admin-shell {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-height: 100dvh;
+  }
+
+  .admin-shell aside {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    min-height: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(90deg, #4c2b1d, #321b13);
+    box-shadow: 0 1px 0 rgb(255 255 255 / .08);
+  }
+
+  .admin-shell .brand {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+  }
+
+  .admin-shell .brand img {
+    width: 82px;
+    height: 44px;
+    margin: 0;
+    object-fit: contain;
+    filter: brightness(1.5);
+  }
+
+  .admin-mobile-menu-button {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgb(255 255 255 / .18);
+    border-radius: 9px;
+    background: rgb(255 255 255 / .08);
+    color: #fff7ee;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .admin-mobile-menu-button span {
+    font-size: 1.35rem;
+    line-height: 1;
+  }
+
+  .admin-shell .logout {
+    width: auto;
+    min-height: 40px;
+    margin: 0;
+    padding: 7px 9px;
+    white-space: nowrap;
+    color: #f3dccd;
+    text-align: center;
+    font-size: .76rem;
+  }
+
+  .admin-shell nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 42;
+    display: none;
+    gap: 5px;
+    margin: 0;
+    padding: 8px 12px 14px;
+    background: #382116;
+    border-top: 1px solid rgb(255 255 255 / .08);
+    box-shadow: 0 16px 28px rgb(25 12 7 / .28);
+  }
+
+  .admin-shell aside.mobile-open nav {
+    display: grid;
+  }
+
+  .admin-shell nav a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 10px 13px;
+    border-radius: 9px;
+    font-size: .88rem;
+  }
+
+  .admin-mobile-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgb(31 18 12 / .36);
+  }
+
+  .admin-main {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px 14px 36px;
+    overflow: visible;
+  }
+
+  .admin-title {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .admin-title h1 {
+    font-size: 1.45rem;
+    line-height: 1.15;
+  }
+
+  .admin-title p {
+    max-width: 32rem;
+    font-size: .8rem;
+    line-height: 1.45;
+  }
+
+  .title-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .title-actions > * {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 10px;
+    justify-content: center;
+  }
+
+  .title-actions > :only-child {
+    grid-column: 1 / -1;
+  }
+
+  .title-actions > :nth-child(3):last-child {
+    grid-column: 1 / -1;
+  }
+
+  .stats,
+  .stats.stats-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px 0;
+  }
+
+  .stat {
+    min-width: 0;
+    padding: 12px;
+  }
+
+  .stat span {
+    font-size: .7rem;
+  }
+
+  .stat strong {
+    font-size: 1.25rem;
+  }
+
+  .panel {
+    width: 100%;
+    min-width: 0;
+    margin-top: 10px;
+    padding: 14px;
+    border-radius: 10px;
+  }
+
+  .panel-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-heading input {
+    width: 100%;
+  }
+
+  .admin-content-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .student-table {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .student-row {
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 9px;
+    padding: 14px 0;
+  }
+
+  .student-row > * {
+    min-width: 0;
+  }
+
+  .student-row select,
+  .student-row .permission-button,
+  .student-row .link-button {
+    width: 100%;
+    max-width: none;
+  }
+
+  .student-row .permission-button {
+    min-height: 40px;
+    border-radius: 8px;
+  }
+
+  .student-row .link-button {
+    min-height: 38px;
+    padding: 8px 0;
+  }
+
+  .group-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .group-card {
+    min-width: 0;
+  }
+
+  .class-management-row {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 14px 0;
+  }
+
+  .class-management-cover {
+    width: 72px;
+    height: 58px;
+  }
+
+  .class-management-body {
+    min-width: 0;
+  }
+
+  .class-management-body p {
+    overflow-wrap: anywhere;
+  }
+
+  .class-management-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    justify-content: stretch;
+  }
+
+  .class-management-actions > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .class-action-button,
+  .delete-class-button,
+  .publish-toggle {
+    border-radius: 8px;
+  }
+
+  .settings-grid,
+  .service-list-horizontal,
+  .diagnostic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-details > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .system-status-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .modal-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .admin-modal,
+  .admin-modal.small,
+  .class-modal,
+  .access-modal,
+  .admin-video-preview,
+  .delete-class-modal {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 8px);
+    overflow: auto;
+    margin: 0;
+    padding: 20px 14px max(22px, env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0;
+  }
+
+  .modal-close {
+    top: 8px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .access-modal-heading,
+  .access-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .access-summary {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .scope-grid,
+  .access-group-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scope-option,
+  .access-group-card {
+    width: 100%;
+  }
+
+  .access-student-row,
+  .student-class-access-row {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .access-choice {
+    width: 100%;
+    grid-column: auto;
+  }
+
+  .access-choice button {
+    flex: 1;
+    min-height: 38px;
+    padding-inline: 6px;
+  }
+
+  .access-section-title input {
+    width: 100%;
+  }
+
+  .admin-preview-frame {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+
+  .modal-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .modal-actions .button {
+    width: 100%;
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 380px) {
+  .admin-shell aside {
+    grid-template-columns: minmax(0, 1fr) 38px auto;
+    gap: 5px;
+    padding-inline: 9px;
+  }
+
+  .admin-shell .brand img {
+    width: 68px;
+  }
+
+  .admin-shell .logout {
+    padding-inline: 6px;
+    font-size: .7rem;
+  }
+
+  .admin-mobile-menu-button {
+    width: 38px;
+    height: 38px;
+  }
+
+  .admin-main {
+    padding-inline: 11px;
+  }
+
+  .stats,
+  .stats.stats-three {
+    grid-template-columns: 1fr;
+  }
+
+  .title-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .title-actions > * {
+    grid-column: 1 !important;
+  }
+
+  .class-management-row {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .class-management-cover {
+    width: 60px;
+    height: 54px;
+  }
+
+  .class-management-actions {
+    grid-template-columns: 1fr;
+  }
+}

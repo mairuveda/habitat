@@ -33,6 +33,7 @@ export default function AdminApp({ page = "dashboard" }: Props) {
   const auth = useProtectedProfile(["admin"]);
   const [currentPage, setCurrentPage] = useState<AdminPage>(page);
   const [notice, setNotice] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const reason = new URLSearchParams(window.location.search).get("reason");
@@ -42,7 +43,11 @@ export default function AdminApp({ page = "dashboard" }: Props) {
   }, []);
 
   useEffect(() => {
-    const onPopState = () => setCurrentPage(pageFromPath(window.location.pathname));
+    const onPopState = () => {
+      setCurrentPage(pageFromPath(window.location.pathname));
+      setMobileMenuOpen(false);
+    };
+
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
@@ -52,11 +57,38 @@ export default function AdminApp({ page = "dashboard" }: Props) {
     if (item) document.title = item.title;
   }, [currentPage]);
 
-  function navigate(event: React.MouseEvent<HTMLAnchorElement>, nextPage: AdminPage, href: string) {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileMenuOpen]);
+
+  function navigate(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    nextPage: AdminPage,
+    href: string
+  ) {
+    if (
+      event.button !== 0
+      || event.metaKey
+      || event.ctrlKey
+      || event.shiftKey
+      || event.altKey
+    ) return;
+
     event.preventDefault();
-    if (window.location.pathname !== href) window.history.pushState({}, "", href);
+
+    if (window.location.pathname !== href) {
+      window.history.pushState({}, "", href);
+    }
+
     setCurrentPage(nextPage);
+    setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
@@ -70,7 +102,7 @@ export default function AdminApp({ page = "dashboard" }: Props) {
 
   return (
     <div className="admin-shell">
-      <aside>
+      <aside className={mobileMenuOpen ? "mobile-open" : ""}>
         <a
           href="/admin"
           className="brand"
@@ -79,22 +111,50 @@ export default function AdminApp({ page = "dashboard" }: Props) {
         >
           <img src="/brand/habitat-logo.png" alt="Hábitat" />
         </a>
-        <nav>
+
+        <button
+          className="admin-mobile-menu-button"
+          type="button"
+          aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="admin-navigation"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span aria-hidden="true">{mobileMenuOpen ? "×" : "☰"}</span>
+        </button>
+
+        <nav id="admin-navigation" aria-label="Administración">
           {menu.map((item) => (
             <a
               className={item.page === currentPage ? "active" : ""}
               href={item.href}
               key={item.page}
+              aria-current={item.page === currentPage ? "page" : undefined}
               onClick={(event) => navigate(event, item.page, item.href)}
             >
               {item.label}
             </a>
           ))}
         </nav>
+
         <LogoutButton />
       </aside>
 
-      {currentPage === "dashboard" && <AdminDashboard adminName={auth.profile.full_name} routeNotice={notice} />}
+      {mobileMenuOpen && (
+        <button
+          className="admin-mobile-scrim"
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {currentPage === "dashboard" && (
+        <AdminDashboard
+          adminName={auth.profile.full_name}
+          routeNotice={notice}
+        />
+      )}
       {currentPage === "students" && <AdminStudents />}
       {currentPage === "groups" && <AdminGroups />}
       {currentPage === "classes" && <AdminClasses />}
