@@ -7,6 +7,14 @@ import {
   type AdminPilatesClass
 } from "@/lib/classes";
 import { NewClassDialog } from "./AdminCreateDialogs";
+import AdminClassAccessDialog from "./AdminClassAccessDialog";
+import AdminClassPreviewDialog from "./AdminClassPreviewDialog";
+
+function scopeLabel(item: AdminPilatesClass): string {
+  if (item.access_scope === "all") return "Todas las alumnas";
+  if (item.access_scope === "selected") return "Por grupos + excepciones";
+  return "Sólo permisos individuales";
+}
 
 export default function AdminClasses() {
   const [groups, setGroups] = useState<StudioGroup[]>([]);
@@ -15,14 +23,24 @@ export default function AdminClasses() {
   const [status, setStatus] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminPilatesClass | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<AdminPilatesClass | null>(null);
+  const [accessTarget, setAccessTarget] = useState<AdminPilatesClass | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   async function refresh() {
     setLoading(true);
     try {
-      const [groupData, classData] = await Promise.all([listGroups(), listAdminClasses()]);
+      const [groupData, classData] = await Promise.all([
+        listGroups(),
+        listAdminClasses()
+      ]);
       setGroups(groupData);
       setClasses(classData);
+
+      if (accessTarget) {
+        const updated = classData.find((item) => item.id === accessTarget.id);
+        if (updated) setAccessTarget(updated);
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No pudimos cargar las clases.");
     } finally {
@@ -32,7 +50,10 @@ export default function AdminClasses() {
 
   useEffect(() => { void refresh(); }, []);
 
-  const publishedCount = useMemo(() => classes.filter((item) => item.published).length, [classes]);
+  const publishedCount = useMemo(
+    () => classes.filter((item) => item.published).length,
+    [classes]
+  );
   const pausedCount = classes.length - publishedCount;
 
   async function toggleClass(item: AdminPilatesClass) {
@@ -76,7 +97,10 @@ export default function AdminClasses() {
   return (
     <main className="admin-main">
       <div className="admin-title">
-        <div><h1>Clases</h1><p>Subí videos, publicá contenido, pausá o eliminá clases.</p></div>
+        <div>
+          <h1>Clases</h1>
+          <p>Reproducí, publicá y controlá exactamente quién puede acceder a cada clase.</p>
+        </div>
         <button className="button" type="button" onClick={() => setDialogOpen(true)}>
           + Nueva clase
         </button>
@@ -92,22 +116,45 @@ export default function AdminClasses() {
 
       <section className="panel">
         <div className="panel-heading compact">
-          <div><h2>Biblioteca</h2><p>Las alumnas sólo ven clases publicadas autorizadas por RLS.</p></div>
+          <div>
+            <h2>Biblioteca</h2>
+            <p>El acceso efectivo combina alcance base, grupo y excepciones individuales.</p>
+          </div>
         </div>
 
         {loading ? <p className="empty-admin">Cargando…</p> : (
           <div className="class-management-list">
-            {classes.map((item) => (
+            {classes.map((item, index) => (
               <article className="class-management-row" key={item.id}>
-                <img src={item.image} alt="" />
+                <div className="class-management-cover">
+                  <span>Clase</span>
+                  <strong>{String(classes.length - index).padStart(2, "0")}</strong>
+                </div>
 
                 <div className="class-management-body">
                   <strong>{item.title}</strong>
                   <small>{item.duration || "—"} min · {item.category} · {item.level}</small>
+                  <span className="class-access-label">{scopeLabel(item)}</span>
                   {item.description && <p>{item.description}</p>}
                 </div>
 
                 <div className="class-management-actions">
+                  <button
+                    className="class-action-button"
+                    type="button"
+                    onClick={() => setPreviewTarget(item)}
+                  >
+                    Ver video
+                  </button>
+
+                  <button
+                    className="class-action-button access"
+                    type="button"
+                    onClick={() => setAccessTarget(item)}
+                  >
+                    Accesos
+                  </button>
+
                   <button
                     className={item.published ? "publish-toggle on" : "publish-toggle"}
                     type="button"
@@ -142,6 +189,21 @@ export default function AdminClasses() {
           onClose={() => setDialogOpen(false)}
           onCreated={refresh}
           onStatus={setStatus}
+        />
+      )}
+
+      {previewTarget && (
+        <AdminClassPreviewDialog
+          item={previewTarget}
+          onClose={() => setPreviewTarget(null)}
+        />
+      )}
+
+      {accessTarget && (
+        <AdminClassAccessDialog
+          item={accessTarget}
+          onClose={() => setAccessTarget(null)}
+          onChanged={refresh}
         />
       )}
 

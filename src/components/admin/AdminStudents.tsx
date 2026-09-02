@@ -8,6 +8,7 @@ import {
   type StudioGroup
 } from "@/lib/admin/students";
 import { NewStudentDialog } from "./AdminCreateDialogs";
+import AdminStudentAccessDialog from "./AdminStudentAccessDialog";
 
 export default function AdminStudents() {
   const [students, setStudents] = useState<AdminStudent[]>([]);
@@ -16,6 +17,7 @@ export default function AdminStudents() {
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [permissionTarget, setPermissionTarget] = useState<AdminStudent | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -23,6 +25,11 @@ export default function AdminStudents() {
       const [studentData, groupData] = await Promise.all([listStudents(), listGroups()]);
       setStudents(studentData);
       setGroups(groupData);
+
+      if (permissionTarget) {
+        const updated = studentData.find((item) => item.id === permissionTarget.id);
+        if (updated) setPermissionTarget(updated);
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No pudimos cargar las alumnas.");
     } finally {
@@ -32,14 +39,22 @@ export default function AdminStudents() {
 
   useEffect(() => { void refresh(); }, []);
 
-  const activeCount = useMemo(() => students.filter((student) => student.active).length, [students]);
-  const withoutGroupCount = useMemo(() => students.filter((student) => !student.group_id).length, [students]);
+  const activeCount = useMemo(
+    () => students.filter((student) => student.active).length,
+    [students]
+  );
+  const withoutGroupCount = useMemo(
+    () => students.filter((student) => !student.group_id).length,
+    [students]
+  );
 
   const filteredStudents = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return students;
     return students.filter((student) =>
-      `${student.full_name} ${student.email} ${student.group_name ?? ""}`.toLowerCase().includes(term)
+      `${student.full_name} ${student.email} ${student.group_name ?? ""}`
+        .toLowerCase()
+        .includes(term)
     );
   }, [students, search]);
 
@@ -87,7 +102,10 @@ export default function AdminStudents() {
   return (
     <main className="admin-main">
       <div className="admin-title">
-        <div><h1>Alumnas</h1><p>Altas, estado y asignación a grupos.</p></div>
+        <div>
+          <h1>Alumnas</h1>
+          <p>Gestioná cuenta, grupo y excepciones de acceso a clases.</p>
+        </div>
         <button className="button" type="button" onClick={() => setDialogOpen(true)}>
           + Nueva alumna
         </button>
@@ -103,7 +121,10 @@ export default function AdminStudents() {
 
       <section className="panel">
         <div className="panel-heading">
-          <div><h2>Listado</h2><p>Una alumna puede pertenecer como máximo a un grupo.</p></div>
+          <div>
+            <h2>Listado</h2>
+            <p>El grupo define el acceso base; “Permisos” administra excepciones individuales.</p>
+          </div>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -114,7 +135,11 @@ export default function AdminStudents() {
         {loading ? <p className="empty-admin">Cargando…</p> : (
           <div className="student-table">
             <div className="student-row student-head">
-              <span>Alumna</span><span>Grupo</span><span>Estado</span><span></span>
+              <span>Alumna</span>
+              <span>Grupo</span>
+              <span>Estado</span>
+              <span>Accesos</span>
+              <span></span>
             </div>
 
             {filteredStudents.map((student) => (
@@ -139,13 +164,27 @@ export default function AdminStudents() {
                   {student.active ? "Activa" : "Suspendida"}
                 </span>
 
-                <button className="link-button" type="button" onClick={() => void toggleStudent(student)}>
+                <button
+                  className="permission-button"
+                  type="button"
+                  onClick={() => setPermissionTarget(student)}
+                >
+                  Permisos
+                </button>
+
+                <button
+                  className="link-button"
+                  type="button"
+                  onClick={() => void toggleStudent(student)}
+                >
                   {student.active ? "Suspender" : "Activar"}
                 </button>
               </div>
             ))}
 
-            {filteredStudents.length === 0 && <p className="empty-admin">No encontramos alumnas.</p>}
+            {filteredStudents.length === 0 && (
+              <p className="empty-admin">No encontramos alumnas.</p>
+            )}
           </div>
         )}
       </section>
@@ -156,6 +195,13 @@ export default function AdminStudents() {
           onClose={() => setDialogOpen(false)}
           onCreated={refresh}
           onStatus={setStatus}
+        />
+      )}
+
+      {permissionTarget && (
+        <AdminStudentAccessDialog
+          student={permissionTarget}
+          onClose={() => setPermissionTarget(null)}
         />
       )}
     </main>

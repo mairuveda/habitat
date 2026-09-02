@@ -50,7 +50,7 @@ test("A01 access control is enforced at UI, Worker and database boundaries", () 
   assert.match(workerSource, /authClient\.auth\.getUser\(token\)/);
   assert.match(workerSource, /profile\?\.role !== "admin"/);
 
-  for (const table of ["profiles", "groups", "group_members", "classes", "class_groups"]) {
+  for (const table of ["profiles", "groups", "group_members", "classes", "class_groups", "class_student_access"]) {
     assert.match(
       databaseSource,
       new RegExp(`alter table public\\.${table} enable row level security`, "i"),
@@ -61,6 +61,9 @@ test("A01 access control is enforced at UI, Worker and database boundaries", () 
   assert.match(databaseSource, /student reads assigned published classes/i);
   assert.match(databaseSource, /published = true/i);
   assert.match(databaseSource, /gm\.profile_id = auth\.uid\(\)/i);
+  assert.match(databaseSource, /class_student_access/i);
+  assert.match(databaseSource, /allowed = true/i);
+  assert.match(databaseSource, /admin manages class overrides/i);
 });
 
 test("A02 security configuration is centralized and protects every Worker response", () => {
@@ -131,6 +134,8 @@ test("A07 portal shells validate once while sensitive APIs revalidate credential
 
   assert.match(workerSource, /authClient\.auth\.getUser\(token\)/);
   assert.match(workerSource, /requireAdmin/);
+  assert.match(workerSource, /async function adminPlayback/);
+  assert.match(workerSource, /adminClassPlaybackMatch/);
 });
 
 test("A08 uploads and destructive operations preserve integrity boundaries", () => {

@@ -81,7 +81,7 @@ export function NewStudentDialog({
 
         <label>
           Contraseña temporal
-          <input name="password" type="text" minLength={8} placeholder="Opcional" />
+          <input name="password" type="text" minLength={12} placeholder="Opcional" />
         </label>
 
         <button className="button full" type="submit">Crear alumna</button>

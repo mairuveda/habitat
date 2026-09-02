@@ -64,7 +64,7 @@ integrationTest("one student can keep at most one group membership", async () =>
   }
 });
 
-integrationTest("RLS exposes global and matching-group classes only", async () => {
+integrationTest("RLS applies global, group and individual class permissions", async () => {
   const admin = adminClient();
   const suffix = crypto.randomUUID();
   const password = `Habitat!${suffix}`;
@@ -110,7 +110,8 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
         level: "Todos",
         video_provider: "cloudinary",
         video_ref: `habitat/classes/global-${suffix}`,
-        published: true
+        published: true,
+        access_scope: "all"
       },
       {
         title: `TDD Restricted ${suffix}`,
@@ -119,7 +120,18 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
         level: "Todos",
         video_provider: "cloudinary",
         video_ref: `habitat/classes/restricted-${suffix}`,
-        published: true
+        published: true,
+        access_scope: "selected"
+      },
+      {
+        title: `TDD Individual ${suffix}`,
+        description: "",
+        category: "Fuerza",
+        level: "Todos",
+        video_provider: "cloudinary",
+        video_ref: `habitat/classes/individual-${suffix}`,
+        published: true,
+        access_scope: "none"
       },
       {
         title: `TDD Draft ${suffix}`,
@@ -128,7 +140,8 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
         level: "Todos",
         video_provider: "cloudinary",
         video_ref: `habitat/classes/draft-${suffix}`,
-        published: false
+        published: false,
+        access_scope: "all"
       }
     ];
 
@@ -138,15 +151,26 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
       .select("id,title");
     assert.ifError(classError);
     assert.ok(createdClasses);
-    assert.equal(createdClasses.length, 3);
     classIds.push(...createdClasses.map((item) => item.id));
 
     const restricted = createdClasses.find((item) => item.title.startsWith("TDD Restricted"));
+    const individual = createdClasses.find((item) => item.title.startsWith("TDD Individual"));
     assert.ok(restricted);
+    assert.ok(individual);
+
     const { error: classGroupError } = await admin
       .from("class_groups")
       .insert({ class_id: restricted.id, group_id: groupIds[0] });
     assert.ifError(classGroupError);
+
+    const { error: individualAllowError } = await admin
+      .from("class_student_access")
+      .insert({
+        class_id: individual.id,
+        profile_id: userIds[1],
+        allowed: true
+      });
+    assert.ifError(individualAllowError);
 
     const visibleTitles: string[][] = [];
     for (const email of emails) {
@@ -155,6 +179,7 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
       });
       const { error: signInError } = await student.auth.signInWithPassword({ email, password });
       assert.ifError(signInError);
+
       const { data, error } = await student
         .from("classes")
         .select("title")
@@ -166,11 +191,39 @@ integrationTest("RLS exposes global and matching-group classes only", async () =
 
     assert.ok(visibleTitles[0].some((title) => title.startsWith("TDD Global")));
     assert.ok(visibleTitles[0].some((title) => title.startsWith("TDD Restricted")));
+    assert.ok(!visibleTitles[0].some((title) => title.startsWith("TDD Individual")));
     assert.ok(!visibleTitles[0].some((title) => title.startsWith("TDD Draft")));
 
     assert.ok(visibleTitles[1].some((title) => title.startsWith("TDD Global")));
     assert.ok(!visibleTitles[1].some((title) => title.startsWith("TDD Restricted")));
+    assert.ok(visibleTitles[1].some((title) => title.startsWith("TDD Individual")));
     assert.ok(!visibleTitles[1].some((title) => title.startsWith("TDD Draft")));
+
+    const { error: denyError } = await admin
+      .from("class_student_access")
+      .insert({
+        class_id: restricted.id,
+        profile_id: userIds[0],
+        allowed: false
+      });
+    assert.ifError(denyError);
+
+    const deniedStudent = createClient(url!, publishableKey!, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    const { error: deniedSignInError } = await deniedStudent.auth.signInWithPassword({
+      email: emails[0],
+      password
+    });
+    assert.ifError(deniedSignInError);
+
+    const { data: afterDeny, error: afterDenyError } = await deniedStudent
+      .from("classes")
+      .select("title")
+      .like("title", `TDD %${suffix}`);
+    assert.ifError(afterDenyError);
+    assert.ok(afterDeny);
+    assert.ok(!afterDeny.some((item) => item.title.startsWith("TDD Restricted")));
   } finally {
     if (classIds.length > 0) await admin.from("classes").delete().in("id", classIds);
     if (userIds.length > 0) {

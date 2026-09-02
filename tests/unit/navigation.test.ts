@@ -129,3 +129,22 @@ test("student class cards are concise and progressive controls avoid redundant U
   assert.match(library, /const showLevelFilter = levels\.length > 1/);
   assert.match(library, /const showCategoryFilter = categories\.length > 1/);
 });
+
+test("admin classes expose preview and access management without weakening student playback", () => {
+  const ui = readFileSync("src/components/admin/AdminClasses.tsx", "utf8");
+  const worker = readFileSync("worker/index.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/0005_class_access.sql", "utf8");
+
+  assert.match(ui, /Ver video/);
+  assert.match(ui, /Accesos/);
+  assert.match(ui, /AdminClassPreviewDialog/);
+  assert.match(ui, /AdminClassAccessDialog/);
+
+  assert.match(worker, /async function adminPlayback/);
+  assert.match(worker, /const context = await requireAdmin\(request, env\)/);
+  assert.match(worker, /async function playback/);
+
+  assert.match(migration, /class_student_access/);
+  assert.match(migration, /access_scope/);
+  assert.match(migration, /allowed = true/);
+});

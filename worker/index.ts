@@ -524,6 +524,47 @@ async function signedDeliveryUrl(env: Env, row: PlaybackRow): Promise<string> {
   return `https://res.cloudinary.com/${encodeURIComponent(cloudName)}/video/${deliveryType}/s--${signature}--/${encodedPath}`;
 }
 
+async function adminPlayback(
+  request: Request,
+  env: Env,
+  classId: string
+): Promise<Response> {
+  const context = await requireAdmin(request, env);
+  if (context instanceof Response) return context;
+
+  const cloudName = getCloudName(env);
+  if (!cloudName || !env.CLOUDINARY_API_SECRET) {
+    return json({ error: "El servicio de video no está disponible." }, 503);
+  }
+
+  const { data, error } = await context.admin
+    .from("classes")
+    .select("video_provider,video_ref,video_delivery_type,video_format,video_version,published")
+    .eq("id", classId)
+    .maybeSingle();
+
+  if (error) {
+    securityEvent(request, "admin-playback-read", "failed");
+    return json({ error: "No pudimos abrir la vista previa." }, 500);
+  }
+
+  if (!data) return json({ error: "La clase no existe." }, 404);
+
+  const row = data as PlaybackRow;
+  if (row.video_provider !== "cloudinary") {
+    return json({ error: "Proveedor de video no soportado en esta versión." }, 422);
+  }
+
+  try {
+    const url = await signedDeliveryUrl(env, row);
+    securityEvent(request, "admin-playback", "allowed");
+    return json({ url });
+  } catch {
+    securityEvent(request, "admin-playback", "failed");
+    return json({ error: "No pudimos generar la vista previa." }, 500);
+  }
+}
+
 async function playback(request: Request, env: Env, classId: string): Promise<Response> {
   const context = await requireAuthenticated(request, env);
   if (context instanceof Response) return context;
@@ -599,6 +640,17 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       return json({ error: "Method not allowed." }, 405);
     }
     return signCloudinaryUpload(request, env);
+  }
+
+  const adminClassPlaybackMatch = url.pathname.match(
+    /^\/api\/admin\/classes\/([0-9a-f-]{36})\/playback$/i
+  );
+
+  if (adminClassPlaybackMatch) {
+    if (request.method !== "GET") {
+      return json({ error: "Method not allowed." }, 405);
+    }
+    return adminPlayback(request, env, adminClassPlaybackMatch[1]);
   }
 
   const adminClassMatch = url.pathname.match(
