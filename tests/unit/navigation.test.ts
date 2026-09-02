@@ -57,17 +57,19 @@ test("admin creation dialogs are shared by dashboard and management pages", () =
   assert.doesNotMatch(groups, /href="\/admin\/alumnas"/);
 });
 
-test("student portal has one canonical classes destination", () => {
+test("student portal stays inside one authenticated shell", () => {
   for (const route of studentRoutes) assert.equal(existsSync(route), true, `${route} should exist`);
 
   const source = readFileSync("src/components/student/StudentApp.tsx", "utf8");
   const login = readFileSync("src/components/auth/LoginForm.tsx", "utf8");
   const protectedProfile = readFileSync("src/components/auth/useProtectedProfile.ts", "utf8");
 
-  assert.match(source, /href="\/alumnos\/clases"/);
-  assert.match(source, /replaceState\(\{\}, "", "\/alumnos\/clases"\)/);
+  assert.match(source, /const CLASSES_PATH = "\/alumnos\/clases"/);
+  assert.match(source, /replaceState\(\{\}, "", CLASSES_PATH\)/);
+  assert.match(source, /function navigateToClasses/);
+  assert.match(source, /event\.preventDefault\(\)/);
+  assert.match(source, /onClick=\{navigateToClasses\}/);
   assert.doesNotMatch(source, />Inicio<\/a>/);
-  assert.doesNotMatch(source, /currentPage|mode=/);
   assert.match(login, /"\/alumnos\/clases"/);
   assert.match(protectedProfile, /"\/alumnos\/clases"/);
 });

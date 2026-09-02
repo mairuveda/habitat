@@ -3,6 +3,8 @@ import LogoutButton from "@/components/auth/LogoutButton";
 import { useProtectedProfile } from "@/components/auth/useProtectedProfile";
 import ClassLibrary from "./ClassLibrary";
 
+const CLASSES_PATH = "/alumnos/clases";
+
 export default function StudentApp() {
   const auth = useProtectedProfile(["student"]);
   const [notice, setNotice] = useState<string | null>(null);
@@ -14,11 +16,29 @@ export default function StudentApp() {
     }
 
     if (window.location.pathname === "/alumnos/dashboard") {
-      window.history.replaceState({}, "", "/alumnos/clases");
+      window.history.replaceState({}, "", CLASSES_PATH);
     }
 
     document.title = "Tus clases · Hábitat";
   }, []);
+
+  function navigateToClasses(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (
+      event.button !== 0
+      || event.metaKey
+      || event.ctrlKey
+      || event.shiftKey
+      || event.altKey
+    ) return;
+
+    event.preventDefault();
+
+    if (window.location.pathname !== CLASSES_PATH) {
+      window.history.replaceState({}, "", CLASSES_PATH);
+    }
+
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
 
   if (auth.status === "loading") {
     return <div className="auth-loading">Validando tu acceso…</div>;
@@ -34,15 +54,21 @@ export default function StudentApp() {
     <div className="student-app">
       <aside>
         <a
-          href="/alumnos/clases"
+          href={CLASSES_PATH}
           className="student-brand"
           aria-label="Ir a tus clases"
+          onClick={navigateToClasses}
         >
           <img src="/brand/habitat-logo.png" alt="Hábitat" />
         </a>
 
         <nav aria-label="Navegación del portal">
-          <a className="active" href="/alumnos/clases" aria-current="page">
+          <a
+            className="active"
+            href={CLASSES_PATH}
+            aria-current="page"
+            onClick={navigateToClasses}
+          >
             Clases
           </a>
         </nav>
