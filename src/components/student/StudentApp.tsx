@@ -41,12 +41,27 @@ export default function StudentApp({ page = "home" }: Props) {
     if (item) document.title = item.title;
   }, [currentPage]);
 
-  function navigate(event: React.MouseEvent<HTMLAnchorElement>, nextPage: StudentPage, href: string) {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
+  function goToPage(nextPage: StudentPage, href: string) {
     if (window.location.pathname !== href) window.history.pushState({}, "", href);
     setCurrentPage(nextPage);
     window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function navigate(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    nextPage: StudentPage,
+    href: string
+  ) {
+    if (
+      event.button !== 0
+      || event.metaKey
+      || event.ctrlKey
+      || event.shiftKey
+      || event.altKey
+    ) return;
+
+    event.preventDefault();
+    goToPage(nextPage, href);
   }
 
   if (auth.status === "loading") {
@@ -70,6 +85,7 @@ export default function StudentApp({ page = "home" }: Props) {
         >
           <img src="/brand/habitat-logo.png" alt="Hábitat" />
         </a>
+
         <nav>
           {menu.map((item) => (
             <a
@@ -82,18 +98,31 @@ export default function StudentApp({ page = "home" }: Props) {
             </a>
           ))}
         </nav>
+
         <LogoutButton />
       </aside>
+
       <section className="student-main">
         {notice && <p className="library-status" role="status">{notice}</p>}
+
         <div className="student-header">
           {currentPage === "home" ? (
-            <div><h1>¡Bienvenida, {displayName}!</h1><p>Este es tu espacio para fluir en movimiento.</p></div>
+            <div>
+              <h1>¡Bienvenida, {displayName}!</h1>
+              <p>Tu espacio para elegir una práctica y seguir moviéndote.</p>
+            </div>
           ) : (
-            <div><h1>Mis clases</h1><p>Contenido disponible para tu cuenta y tu grupo.</p></div>
+            <div>
+              <h1>Mis clases</h1>
+              <p>Buscá y filtrá todo el contenido disponible para tu cuenta.</p>
+            </div>
           )}
         </div>
-        <ClassLibrary />
+
+        <ClassLibrary
+          mode={currentPage === "home" ? "summary" : "full"}
+          onViewAll={() => goToPage("classes", "/alumnos/clases")}
+        />
       </section>
     </div>
   );

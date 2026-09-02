@@ -105,3 +105,27 @@ test("public navigation uses clear login wording and login exposes a visible hom
   assert.match(login, /Volver al inicio/);
   assert.match(login, /btn btn-secondary login-back/);
 });
+
+test("student home is a summary and classes remains the full searchable library", () => {
+  const app = readFileSync("src/components/student/StudentApp.tsx", "utf8");
+  const library = readFileSync("src/components/student/ClassLibrary.tsx", "utf8");
+
+  assert.match(app, /mode={currentPage === "home" \? "summary" : "full"}/);
+  assert.match(app, /onViewAll={\(\) => goToPage\("classes", "\/alumnos\/clases"\)}/);
+
+  assert.match(library, /Clases disponibles para vos/);
+  assert.match(library, /Clases recientes/);
+  assert.match(library, /Ver todas las clases/);
+  assert.match(library, /Todas tus clases/);
+  assert.match(library, /Buscar clases/);
+});
+
+test("student class cards use generated class covers instead of fake thumbnails", () => {
+  const library = readFileSync("src/components/student/ClassLibrary.tsx", "utf8");
+
+  assert.match(library, /className="class-cover"/);
+  assert.match(library, /className="class-number"/);
+  assert.match(library, /Clase {numberLabel\(classNumber\)}/);
+  assert.match(library, /item\.description/);
+  assert.doesNotMatch(library, /<img src={item\.image}/);
+});
