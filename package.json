@@ -6,12 +6,12 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && tsc -p tsconfig.worker.json --noEmit && astro build",
-    "preview": "npm run build && wrangler dev --ip 127.0.0.1 --port 8787",
-    "deploy": "npm run build && wrangler deploy",
+    "preview": "pnpm run build && wrangler dev --ip 127.0.0.1 --port 8787",
+    "deploy": "pnpm run build && wrangler deploy",
     "check": "astro check && tsc -p tsconfig.worker.json --noEmit",
     "test": "node --experimental-strip-types --test tests/unit/*.test.ts",
     "test:integration": "node --experimental-strip-types --test tests/integration/*.test.ts",
-    "preview:share": "npm run build && wrangler dev --ip 127.0.0.1 --port 8787 --tunnel",
+    "preview:share": "pnpm run build && wrangler dev --ip 127.0.0.1 --port 8787 --tunnel",
     "security:check": "pnpm test && pnpm run check && pnpm run build",
     "security:audit": "pnpm audit --prod --audit-level high"
   },
