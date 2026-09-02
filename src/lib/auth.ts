@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 
 export type UserRole = "admin" | "student";
 
@@ -19,7 +19,10 @@ async function withTimeout<T>(operation: PromiseLike<T>, timeoutMs = VALIDATION_
     return await Promise.race([
       Promise.resolve(operation),
       new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error("La validación de sesión tardó demasiado.")), timeoutMs);
+        timeoutId = setTimeout(
+          () => reject(new Error("La validación de sesión tardó demasiado.")),
+          timeoutMs
+        );
       })
     ]);
   } finally {
@@ -28,7 +31,7 @@ async function withTimeout<T>(operation: PromiseLike<T>, timeoutMs = VALIDATION_
 }
 
 export async function getCurrentProfile(): Promise<Profile | null> {
-  if (!supabase) return null;
+  const supabase = await getSupabase();
 
   const { data: sessionData, error: sessionError } = await withTimeout(supabase.auth.getSession());
   if (sessionError) throw new Error("No pudimos leer tu sesión.");
@@ -50,6 +53,6 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 }
 
 export async function signOut(): Promise<void> {
-  if (!supabase) return;
+  const supabase = await getSupabase();
   await supabase.auth.signOut({ scope: "local" });
 }

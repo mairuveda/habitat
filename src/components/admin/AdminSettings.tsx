@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Profile } from "@/lib/auth";
-import { getVideoUploadConfiguration } from "@/lib/browser-config";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { getRuntimeConfig } from "@/lib/runtime-config";
+import { getSupabase } from "@/lib/supabase";
 
 type Props = {
   profile: Profile;
@@ -18,7 +18,7 @@ type RuntimeServices = {
 type RuntimeReadiness = {
   ready: boolean;
   services: RuntimeServices;
-  missing: string[];
+  missing?: string[];
 };
 
 type RuntimeState =
@@ -30,10 +30,18 @@ function ServiceRow({ label, ok }: { label: string; ok: boolean | null }) {
   return (
     <div className="service-row compact-service-row">
       <span
-        className={ok === true ? "service-dot ok" : ok === false ? "service-dot error" : "service-dot"}
+        className={
+          ok === true
+            ? "service-dot ok"
+            : ok === false
+              ? "service-dot error"
+              : "service-dot"
+        }
         aria-hidden="true"
       />
+
       <strong>{label}</strong>
+
       <span className={ok === true ? "status-pill active" : "status-pill"}>
         {ok === null ? "Sin verificar" : ok ? "Operativo" : "Revisar"}
       </span>
@@ -47,39 +55,39 @@ export default function AdminSettings({ profile }: Props) {
     readiness: null,
     message: null
   });
+  const [publicConfigReady, setPublicConfigReady] = useState<boolean | null>(null);
   const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
   const [savingPassword, setSavingPassword] = useState(false);
-
-  const browserVideo = useMemo(() => getVideoUploadConfiguration({
-    cloudName: import.meta.env.PUBLIC_CLOUDINARY_CLOUD_NAME,
-    apiKey: import.meta.env.PUBLIC_CLOUDINARY_API_KEY,
-    uploadPreset: import.meta.env.PUBLIC_CLOUDINARY_UPLOAD_PRESET
-  }), []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function checkRuntime() {
       try {
-        const response = await fetch("/api/ready", { cache: "no-store" });
+        const [readyResponse] = await Promise.all([
+          fetch("/api/ready", {
+            cache: "no-store",
+            headers: { accept: "application/json" }
+          }),
+          getRuntimeConfig().then(() => {
+            if (!cancelled) setPublicConfigReady(true);
+          })
+        ]);
 
-        if (response.status === 404) {
+        if (readyResponse.status === 404) {
           if (!cancelled) {
             setRuntime({
               status: "unavailable",
               readiness: null,
-              message: "El backend no está activo en esta ejecución local."
+              message: "El backend no está activo en esta ejecución."
             });
           }
           return;
         }
 
-        const payload = await response.json().catch(() => ({})) as Partial<RuntimeReadiness>;
-        if (
-          typeof payload.ready !== "boolean"
-          || !payload.services
-          || !Array.isArray(payload.missing)
-        ) {
+        const payload = await readyResponse.json().catch(() => ({})) as Partial<RuntimeReadiness>;
+
+        if (typeof payload.ready !== "boolean" || !payload.services) {
           if (!cancelled) {
             setRuntime({
               status: "unavailable",
@@ -94,11 +102,14 @@ export default function AdminSettings({ profile }: Props) {
           setRuntime({
             status: "checked",
             readiness: payload as RuntimeReadiness,
-            message: response.ok ? null : "Hay configuración pendiente en el runtime."
+            message: readyResponse.ok
+              ? null
+              : "Hay servicios pendientes de configuración."
           });
         }
       } catch {
         if (!cancelled) {
+          setPublicConfigReady(false);
           setRuntime({
             status: "unavailable",
             readiness: null,
@@ -112,32 +123,40 @@ export default function AdminSettings({ profile }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  async function submitPassword(event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) {
+  async function submitPassword(
+    event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>
+  ) {
     event.preventDefault();
     setPasswordStatus(null);
 
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const password = String(form.get("password") ?? "");
     const confirmation = String(form.get("confirmation") ?? "");
 
-    if (password.length < 8) {
-      setPasswordStatus("La nueva contraseña debe tener al menos 8 caracteres.");
+    if (password.length < 12) {
+      setPasswordStatus("La nueva contraseña debe tener al menos 12 caracteres.");
       return;
     }
+
+    if (password.length > 128) {
+      setPasswordStatus("La nueva contraseña es demasiado larga.");
+      return;
+    }
+
     if (password !== confirmation) {
       setPasswordStatus("Las contraseñas no coinciden.");
       return;
     }
-    if (!supabase) {
-      setPasswordStatus("El servicio de cuenta no está disponible.");
-      return;
-    }
 
     setSavingPassword(true);
+
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      event.currentTarget.reset();
+
+      formElement.reset();
       setPasswordStatus("Contraseña actualizada correctamente.");
     } catch {
       setPasswordStatus("No pudimos actualizar la contraseña.");
@@ -153,61 +172,103 @@ export default function AdminSettings({ profile }: Props) {
     && services.videoPlayback
     && services.videoDelete
   );
-  const systemOk = Boolean(
-    isSupabaseConfigured
-    && browserVideo.configured
-    && readiness?.ready
-  );
+  const systemOk = Boolean(publicConfigReady && readiness?.ready);
 
   return (
     <main className="admin-main">
       <div className="admin-title">
-        <div><h1>Ajustes</h1><p>Tu cuenta, seguridad y estado general del portal.</p></div>
+        <div>
+          <h1>Ajustes</h1>
+          <p>Tu cuenta, seguridad y estado general del portal.</p>
+        </div>
       </div>
 
       <div className="settings-grid account-settings-grid">
         <section className="panel settings-panel">
           <div className="panel-heading compact">
-            <div><h2>Mi cuenta</h2><p>Datos de la cuenta con la que administrás Hábitat.</p></div>
+            <div>
+              <h2>Mi cuenta</h2>
+              <p>Datos de la cuenta con la que administrás Hábitat.</p>
+            </div>
           </div>
+
           <dl className="account-details">
             <div><dt>Nombre</dt><dd>{profile.full_name || "Administradora"}</dd></div>
             <div><dt>Email</dt><dd>{profile.email}</dd></div>
             <div><dt>Perfil</dt><dd>Administración</dd></div>
           </dl>
-          <a className="text-action" href="/" target="_blank" rel="noreferrer">Ver sitio público ↗</a>
+
+          <a
+            className="text-action"
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ver sitio público ↗
+          </a>
         </section>
 
         <section className="panel settings-panel">
           <div className="panel-heading compact">
-            <div><h2>Seguridad</h2><p>Cambiá la contraseña de tu cuenta de administración.</p></div>
+            <div>
+              <h2>Seguridad</h2>
+              <p>Cambiá la contraseña de tu cuenta de administración.</p>
+            </div>
           </div>
+
           <form className="password-form" onSubmit={submitPassword}>
             <label>
               Nueva contraseña
-              <input name="password" type="password" minLength={8} autoComplete="new-password" required />
+              <input
+                name="password"
+                type="password"
+                minLength={12}
+                maxLength={128}
+                autoComplete="new-password"
+                required
+              />
             </label>
+
             <label>
               Repetir contraseña
-              <input name="confirmation" type="password" minLength={8} autoComplete="new-password" required />
+              <input
+                name="confirmation"
+                type="password"
+                minLength={12}
+                maxLength={128}
+                autoComplete="new-password"
+                required
+              />
             </label>
+
             <button className="button" type="submit" disabled={savingPassword}>
               {savingPassword ? "Guardando…" : "Actualizar contraseña"}
             </button>
           </form>
-          {passwordStatus && <p className="settings-inline-status" role="status">{passwordStatus}</p>}
+
+          {passwordStatus && (
+            <p className="settings-inline-status" role="status">
+              {passwordStatus}
+            </p>
+          )}
         </section>
       </div>
 
       <section className="panel system-status-panel">
         <div className="system-status-heading">
-          <div><h2>Estado del sistema</h2><p>Comprobación rápida de los servicios que usa el portal.</p></div>
+          <div>
+            <h2>Estado del sistema</h2>
+            <p>Comprobación rápida de los servicios que usa el portal.</p>
+          </div>
+
           <span className={systemOk ? "status-pill active" : "status-pill"}>
             {systemOk ? "Todo operativo" : "Revisar"}
           </span>
         </div>
 
-        {runtime.message && <p className="admin-status" role="status">{runtime.message}</p>}
+        {runtime.message && (
+          <p className="admin-status" role="status">{runtime.message}</p>
+        )}
 
         <div className="service-list service-list-horizontal">
           <ServiceRow label="Cuenta y acceso" ok={services?.auth ?? null} />
@@ -217,25 +278,42 @@ export default function AdminSettings({ profile }: Props) {
 
         <details className="technical-diagnostics">
           <summary>Diagnóstico técnico</summary>
+
           <div className="diagnostic-grid">
-            <div><span>Supabase navegador</span><strong>{isSupabaseConfigured ? "OK" : "Pendiente"}</strong></div>
-            <div><span>Cloudinary navegador</span><strong>{browserVideo.configured ? "OK" : "Pendiente"}</strong></div>
-            <div><span>Carga de video</span><strong>{services?.videoUpload ? "OK" : "Pendiente"}</strong></div>
-            <div><span>Reproducción</span><strong>{services?.videoPlayback ? "OK" : "Pendiente"}</strong></div>
-            <div><span>Eliminación</span><strong>{services?.videoDelete ? "OK" : "Pendiente"}</strong></div>
-            <div><span>Versión</span><strong>0.4.1</strong></div>
+            <div>
+              <span>Configuración pública</span>
+              <strong>{publicConfigReady ? "OK" : "Pendiente"}</strong>
+            </div>
+            <div>
+              <span>Carga de video</span>
+              <strong>{services?.videoUpload ? "OK" : "Pendiente"}</strong>
+            </div>
+            <div>
+              <span>Reproducción</span>
+              <strong>{services?.videoPlayback ? "OK" : "Pendiente"}</strong>
+            </div>
+            <div>
+              <span>Eliminación</span>
+              <strong>{services?.videoDelete ? "OK" : "Pendiente"}</strong>
+            </div>
+            <div>
+              <span>Versión</span>
+              <strong>0.4.1</strong>
+            </div>
           </div>
 
-          {!browserVideo.configured && (
-            <p>Configuración de video del navegador incompleta: {browserVideo.missing.join(", ")}.</p>
-          )}
-
-          {readiness && readiness.missing.length > 0 && (
-            <p>Configuración runtime pendiente: <code>{readiness.missing.join(", ")}</code>.</p>
+          {readiness?.missing && readiness.missing.length > 0 && (
+            <p>
+              Configuración local pendiente:{" "}
+              <code>{readiness.missing.join(", ")}</code>.
+            </p>
           )}
 
           {runtime.status === "unavailable" && (
-            <p>El backend `/api/*` se prueba localmente con <code>pnpm preview</code>.</p>
+            <p>
+              El backend `/api/*` se prueba localmente con{" "}
+              <code>pnpm preview</code>.
+            </p>
           )}
         </details>
       </section>

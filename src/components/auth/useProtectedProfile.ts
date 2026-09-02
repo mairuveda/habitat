@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCurrentProfile, signOut, type Profile, type UserRole } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase";
+import { RuntimeConfigurationError } from "@/lib/runtime-config";
 
 type State =
   | { status: "loading"; profile: null; message: null }
@@ -14,17 +14,16 @@ function routeForRole(role: UserRole, reason?: string): string {
 
 export function useProtectedProfile(allowedRoles: readonly UserRole[]): State {
   const rolesKey = allowedRoles.join(",");
-  const [state, setState] = useState<State>({ status: "loading", profile: null, message: null });
+  const [state, setState] = useState<State>({
+    status: "loading",
+    profile: null,
+    message: null
+  });
 
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
-      if (!isSupabaseConfigured) {
-        window.location.replace("/alumnos?reason=config");
-        return;
-      }
-
       try {
         const profile = await getCurrentProfile();
         if (cancelled) return;
@@ -47,16 +46,21 @@ export function useProtectedProfile(allowedRoles: readonly UserRole[]): State {
         }
 
         setState({ status: "ready", profile, message: null });
-      } catch {
+      } catch (error) {
         await signOut().catch(() => undefined);
-        if (!cancelled) window.location.replace("/alumnos?reason=validation");
+
+        if (!cancelled) {
+          window.location.replace(
+            error instanceof RuntimeConfigurationError
+              ? "/alumnos?reason=config"
+              : "/alumnos?reason=validation"
+          );
+        }
       }
     }
 
     void check();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [rolesKey]);
 
   return state;

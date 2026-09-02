@@ -6,6 +6,7 @@ import {
   getCloudName,
   getPublishableKey,
   getSupabaseUrl,
+  publicRuntimeConfig,
   runtimeReadiness,
   type RuntimeEnv
 } from "./runtime-services";
@@ -14,6 +15,12 @@ import {
   cloudinaryDestroySucceeded,
   cloudinarySignaturePayload
 } from "./cloudinary-delete";
+import {
+  isSameOriginRequest,
+  readJson,
+  secureResponse,
+  securityEvent
+} from "./security";
 
 interface Env extends RuntimeEnv {
   ASSETS: Fetcher;
@@ -79,19 +86,37 @@ function createServerClient(url: string, key: string): SupabaseClient {
   });
 }
 
-async function requireAuthenticated(request: Request, env: Env): Promise<AuthContext | Response> {
+async function requireAuthenticated(
+  request: Request,
+  env: Env
+): Promise<AuthContext | Response> {
   const supabaseUrl = getSupabaseUrl(env);
   const publishableKey = getPublishableKey(env);
-  if (!supabaseUrl || !publishableKey) return json({ error: "El servicio de autenticación no está disponible." }, 503);
+
+  if (!supabaseUrl || !publishableKey) {
+    securityEvent(request, "authentication-config", "failed");
+    return json({ error: "El servicio de autenticación no está disponible." }, 503);
+  }
 
   const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) return json({ error: "No autorizado." }, 401);
+  if (!authorization?.startsWith("Bearer ")) {
+    securityEvent(request, "authentication", "denied");
+    return json({ error: "No autorizado." }, 401);
+  }
+
   const token = authorization.slice("Bearer ".length).trim();
-  if (!token) return json({ error: "No autorizado." }, 401);
+  if (!token) {
+    securityEvent(request, "authentication", "denied");
+    return json({ error: "No autorizado." }, 401);
+  }
 
   const authClient = createServerClient(supabaseUrl, publishableKey);
   const { data: authData, error: authError } = await authClient.auth.getUser(token);
-  if (authError || !authData.user) return json({ error: "Sesión inválida." }, 401);
+
+  if (authError || !authData.user) {
+    securityEvent(request, "authentication", "denied");
+    return json({ error: "Sesión inválida." }, 401);
+  }
 
   const userClient = createClient(supabaseUrl, publishableKey, {
     accessToken: async () => token,
@@ -102,20 +127,26 @@ async function requireAuthenticated(request: Request, env: Env): Promise<AuthCon
     }
   });
 
-  return { userId: authData.user.id, token, userClient };
+  return {
+    userId: authData.user.id,
+    token,
+    userClient
+  };
 }
 
-async function requireAdmin(request: Request, env: Env): Promise<AdminContext | Response> {
+async function requireAdmin(
+  request: Request,
+  env: Env
+): Promise<AdminContext | Response> {
   const auth = await requireAuthenticated(request, env);
   if (auth instanceof Response) return auth;
 
   const supabaseUrl = getSupabaseUrl(env);
   const secretKey = getAdminKey(env);
+
   if (!supabaseUrl || !secretKey) {
-    return json({
-      error: "La administración de usuarios no está disponible.",
-      missing: ["SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY"]
-    }, 503);
+    securityEvent(request, "admin-config", "failed");
+    return json({ error: "El servicio administrativo no está disponible." }, 503);
   }
 
   const admin = createServerClient(supabaseUrl, secretKey);
@@ -126,7 +157,8 @@ async function requireAdmin(request: Request, env: Env): Promise<AdminContext | 
     .single();
 
   if (profileError || profile?.role !== "admin" || profile.active !== true) {
-    return json({ error: "Se requiere rol de administradora." }, 403);
+    securityEvent(request, "admin-authorization", "denied");
+    return json({ error: "No tenés permisos para realizar esta operación." }, 403);
   }
 
   return { ...auth, admin };
@@ -139,19 +171,46 @@ function randomPassword(): string {
 }
 
 async function createStudent(request: Request, env: Env): Promise<Response> {
+  if (!isSameOriginRequest(request)) {
+    securityEvent(request, "create-student-origin", "denied");
+    return json({ error: "Origen no permitido." }, 403);
+  }
+
   const context = await requireAdmin(request, env);
   if (context instanceof Response) return context;
 
-  const body = await request.json().catch(() => ({})) as CreateStudentBody;
+  const parsed = await readJson<CreateStudentBody | null>(request);
+  if (!parsed.ok) return json({ error: parsed.error }, parsed.status);
+
+  const body = parsed.value;
+  if (!body || typeof body !== "object") {
+    return json({ error: "Solicitud inválida." }, 400);
+  }
+
   const email = body.email?.trim().toLowerCase() ?? "";
   const fullName = body.fullName?.trim() ?? "";
   const suppliedPassword = body.password?.trim();
   const password = suppliedPassword || randomPassword();
   const groupId = body.groupId?.trim() || null;
 
-  if (!email || !email.includes("@")) return json({ error: "Ingresá un email válido." }, 400);
-  if (!fullName) return json({ error: "Ingresá el nombre de la alumna." }, 400);
-  if (password.length < 8) return json({ error: "La contraseña debe tener al menos 8 caracteres." }, 400);
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (!emailPattern.test(email) || email.length > 254) {
+    return json({ error: "Ingresá un email válido." }, 400);
+  }
+
+  if (!fullName || fullName.length > 120) {
+    return json({ error: "Ingresá un nombre válido." }, 400);
+  }
+
+  if (password.length < 12 || password.length > 128) {
+    return json({ error: "La contraseña debe tener entre 12 y 128 caracteres." }, 400);
+  }
+
+  if (groupId && !uuidPattern.test(groupId)) {
+    return json({ error: "El grupo seleccionado no es válido." }, 400);
+  }
 
   if (groupId) {
     const { data: group, error: groupError } = await context.admin
@@ -160,7 +219,10 @@ async function createStudent(request: Request, env: Env): Promise<Response> {
       .eq("id", groupId)
       .eq("active", true)
       .maybeSingle();
-    if (groupError || !group) return json({ error: "El grupo seleccionado no existe o está inactivo." }, 400);
+
+    if (groupError || !group) {
+      return json({ error: "El grupo seleccionado no existe o está inactivo." }, 400);
+    }
   }
 
   const { data: created, error: createError } = await context.admin.auth.admin.createUser({
@@ -171,24 +233,31 @@ async function createStudent(request: Request, env: Env): Promise<Response> {
   });
 
   if (createError || !created.user) {
-    const message = createError?.message?.toLowerCase().includes("already")
-      ? "Ya existe una cuenta con ese email."
-      : "No pudimos crear la cuenta de la alumna.";
-    return json({ error: message }, 400);
+    securityEvent(request, "create-student", "failed");
+    return json({ error: "No pudimos crear la cuenta de la alumna." }, 400);
   }
 
   if (groupId) {
     const { error: memberError } = await context.admin
       .from("group_members")
-      .insert({ profile_id: created.user.id, group_id: groupId });
+      .insert({
+        profile_id: created.user.id,
+        group_id: groupId
+      });
 
     if (memberError) {
       await context.admin.auth.admin.deleteUser(created.user.id);
-      return json({ error: "No pudimos asignar el grupo; la cuenta no fue creada." }, 500);
+      securityEvent(request, "create-student-group", "failed");
+      return json({ error: "No pudimos completar el alta de la alumna." }, 500);
     }
   }
 
-  return json({ id: created.user.id, temporaryPassword: suppliedPassword ? undefined : password }, 201);
+  securityEvent(request, "create-student", "allowed");
+
+  return json({
+    id: created.user.id,
+    temporaryPassword: suppliedPassword ? undefined : password
+  }, 201);
 }
 
 async function sha1Bytes(value: string): Promise<Uint8Array> {
@@ -196,9 +265,11 @@ async function sha1Bytes(value: string): Promise<Uint8Array> {
   return new Uint8Array(digest);
 }
 
-async function sha1Hex(value: string): Promise<string> {
-  const bytes = await sha1Bytes(value);
-  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function base64Url(bytes: Uint8Array): string {
@@ -207,31 +278,67 @@ function base64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-async function signCloudinaryUpload(request: Request, env: Env): Promise<Response> {
+async function signCloudinaryUpload(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  if (!isSameOriginRequest(request)) {
+    securityEvent(request, "cloudinary-sign-origin", "denied");
+    return json({ error: "Origen no permitido." }, 403);
+  }
+
   const context = await requireAdmin(request, env);
   if (context instanceof Response) return context;
 
   const readiness = runtimeReadiness(env);
   const uploadPreset = getCloudinaryPreset(env);
-  if (!readiness.services.videoUpload || !uploadPreset) {
-    return json({
-      error: "La carga de videos no está disponible.",
-      missing: readiness.missing.filter((name) => name.startsWith("CLOUDINARY"))
-    }, 503);
+
+  if (!readiness.services.videoUpload || !uploadPreset || !env.CLOUDINARY_API_SECRET) {
+    securityEvent(request, "cloudinary-sign-config", "failed");
+    return json({ error: "La carga de videos no está disponible." }, 503);
   }
 
-  const body = await request.json().catch(() => ({})) as SignBody;
-  const params = body.paramsToSign;
-  if (!params || typeof params !== "object") return json({ error: "Faltan parámetros de firma." }, 400);
+  const parsed = await readJson<SignBody | null>(request);
+  if (!parsed.ok) return json({ error: parsed.error }, parsed.status);
+
+  const params = parsed.value?.paramsToSign;
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    return json({ error: "Faltan parámetros de firma." }, 400);
+  }
+
+  const allowedKeys = new Set([
+    "asset_folder",
+    "context",
+    "filename_override",
+    "folder",
+    "public_id",
+    "source",
+    "tags",
+    "timestamp",
+    "upload_preset",
+    "unique_filename",
+    "use_filename"
+  ]);
+
+  const unexpected = Object.keys(params).filter((key) => !allowedKeys.has(key));
+  if (unexpected.length > 0) {
+    securityEvent(request, "cloudinary-sign-params", "denied");
+    return json({ error: "Parámetros de carga no permitidos." }, 400);
+  }
 
   const folder = String(params.asset_folder ?? params.folder ?? "");
-  if (folder && folder !== "habitat/classes") return json({ error: "Carpeta de carga inválida." }, 400);
+  if (folder && folder !== "habitat/classes") {
+    return json({ error: "Carpeta de carga inválida." }, 400);
+  }
 
   const preset = String(params.upload_preset ?? "");
-  if (preset !== uploadPreset) return json({ error: "Upload preset inválido." }, 400);
+  if (preset !== uploadPreset) {
+    return json({ error: "Upload preset inválido." }, 400);
+  }
 
   const timestamp = Number(params.timestamp ?? 0);
   const now = Math.floor(Date.now() / 1000);
+
   if (!Number.isFinite(timestamp) || Math.abs(now - timestamp) > 3600) {
     return json({ error: "Timestamp de carga inválido." }, 400);
   }
@@ -242,7 +349,11 @@ async function signCloudinaryUpload(request: Request, env: Env): Promise<Respons
     .map(([key, value]) => `${key}=${String(value)}`)
     .join("&");
 
-  const signature = await sha1Hex(`${signaturePayload}${env.CLOUDINARY_API_SECRET}`);
+  const signature = await sha256Hex(
+    `${signaturePayload}${env.CLOUDINARY_API_SECRET}`
+  );
+
+  securityEvent(request, "cloudinary-sign", "allowed");
   return json({ signature });
 }
 
@@ -263,7 +374,7 @@ async function destroyCloudinaryVideo(
     row.video_delivery_type,
     Math.floor(Date.now() / 1000)
   );
-  const signature = await sha1Hex(`${cloudinarySignaturePayload(params)}${apiSecret}`);
+  const signature = await sha256Hex(`${cloudinarySignaturePayload(params)}${apiSecret}`);
 
   const body = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -299,15 +410,18 @@ async function deleteAdminClass(
   env: Env,
   classId: string
 ): Promise<Response> {
+  if (!isSameOriginRequest(request)) {
+    securityEvent(request, "delete-class-origin", "denied");
+    return json({ error: "Origen no permitido." }, 403);
+  }
+
   const context = await requireAdmin(request, env);
   if (context instanceof Response) return context;
 
   const readiness = runtimeReadiness(env);
   if (!readiness.services.videoDelete) {
-    return json({
-      error: "La eliminación de videos no está configurada en el Worker.",
-      missing: readiness.missing.filter((name) => name.startsWith("CLOUDINARY"))
-    }, 503);
+    securityEvent(request, "delete-class-config", "failed");
+    return json({ error: "La eliminación de videos no está disponible." }, 503);
   }
 
   const { data, error } = await context.admin
@@ -316,28 +430,32 @@ async function deleteAdminClass(
     .eq("id", classId)
     .maybeSingle();
 
-  if (error) return json({ error: "No pudimos leer la clase antes de eliminarla." }, 500);
+  if (error) {
+    securityEvent(request, "delete-class-read", "failed");
+    return json({ error: "No pudimos preparar la eliminación." }, 500);
+  }
+
   if (!data) return json({ error: "La clase ya no existe." }, 404);
 
   const row = data as DeleteClassRow;
   if (row.video_provider !== "cloudinary") {
-    return json(
-      { error: "La eliminación coordinada sólo soporta videos de Cloudinary en esta versión." },
-      422
-    );
+    return json({ error: "Proveedor de video no soportado." }, 422);
   }
 
   const wasPublished = row.published === true;
+
   const { error: pauseError } = await context.admin
     .from("classes")
     .update({ published: false })
     .eq("id", classId);
 
   if (pauseError) {
-    return json({ error: "No pudimos asegurar la clase antes de eliminarla." }, 500);
+    securityEvent(request, "delete-class-pause", "failed");
+    return json({ error: "No pudimos preparar la eliminación." }, 500);
   }
 
   let video: "deleted" | "missing";
+
   try {
     video = await destroyCloudinaryVideo(env, row);
   } catch {
@@ -348,20 +466,18 @@ async function deleteAdminClass(
         .eq("id", classId);
 
       if (restoreError) {
-        return json(
-          {
-            error: "No pudimos eliminar el video y la clase quedó pausada. Revisá la configuración de Cloudinary.",
-            cleanupRequired: true
-          },
-          502
-        );
+        securityEvent(request, "delete-class-restore", "failed");
+        return json({
+          error: "La eliminación falló y la clase quedó pausada.",
+          cleanupRequired: true
+        }, 502);
       }
     }
 
-    return json(
-      { error: "No pudimos eliminar el video de Cloudinary. La clase no fue eliminada." },
-      502
-    );
+    securityEvent(request, "delete-class-video", "failed");
+    return json({
+      error: "No pudimos eliminar el video. La clase no fue eliminada."
+    }, 502);
   }
 
   const { error: deleteError } = await context.admin
@@ -370,14 +486,14 @@ async function deleteAdminClass(
     .eq("id", classId);
 
   if (deleteError) {
-    return json(
-      {
-        error: "El video se eliminó de Cloudinary, pero no pudimos eliminar la clase. Quedó pausada; reintentá.",
-        cleanupRequired: true
-      },
-      500
-    );
+    securityEvent(request, "delete-class-record", "failed");
+    return json({
+      error: "El video fue eliminado, pero la clase quedó pausada. Reintentá.",
+      cleanupRequired: true
+    }, 500);
   }
+
+  securityEvent(request, "delete-class", "allowed");
 
   return json({
     ok: true,
@@ -436,36 +552,96 @@ async function playback(request: Request, env: Env, classId: string): Promise<Re
 
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  const localRequest = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
 
-  if (url.pathname === "/api/health" && request.method === "GET") {
+  if (url.pathname === "/api/config") {
+    if (request.method !== "GET") {
+      return json({ error: "Method not allowed." }, 405);
+    }
+
+    return json(publicRuntimeConfig(env));
+  }
+
+  if (url.pathname === "/api/health") {
+    if (request.method !== "GET") {
+      return json({ error: "Method not allowed." }, 405);
+    }
+
     return json({ ok: true, version: "0.4.1" });
   }
 
-  if (url.pathname === "/api/ready" && request.method === "GET") {
-    const readiness = runtimeReadiness(env);
-    return json(
-      { version: "0.4.1", ...readiness },
-      readiness.ready ? 200 : 503
-    );
-  }
-  if (url.pathname === "/api/admin/students" && request.method === "POST") return createStudent(request, env);
-  if (url.pathname === "/api/cloudinary/sign" && request.method === "POST") return signCloudinaryUpload(request, env);
+  if (url.pathname === "/api/ready") {
+    if (request.method !== "GET") {
+      return json({ error: "Method not allowed." }, 405);
+    }
 
-  const adminClassMatch = url.pathname.match(/^\/api\/admin\/classes\/([0-9a-f-]{36})$/i);
-  if (adminClassMatch && request.method === "DELETE") {
+    const readiness = runtimeReadiness(env);
+    const payload = localRequest
+      ? { version: "0.4.1", ...readiness }
+      : {
+          version: "0.4.1",
+          ready: readiness.ready,
+          services: readiness.services
+        };
+
+    return json(payload, readiness.ready ? 200 : 503);
+  }
+
+  if (url.pathname === "/api/admin/students") {
+    if (request.method !== "POST") {
+      return json({ error: "Method not allowed." }, 405);
+    }
+    return createStudent(request, env);
+  }
+
+  if (url.pathname === "/api/cloudinary/sign") {
+    if (request.method !== "POST") {
+      return json({ error: "Method not allowed." }, 405);
+    }
+    return signCloudinaryUpload(request, env);
+  }
+
+  const adminClassMatch = url.pathname.match(
+    /^\/api\/admin\/classes\/([0-9a-f-]{36})$/i
+  );
+
+  if (adminClassMatch) {
+    if (request.method !== "DELETE") {
+      return json({ error: "Method not allowed." }, 405);
+    }
     return deleteAdminClass(request, env, adminClassMatch[1]);
   }
 
-  const match = url.pathname.match(/^\/api\/classes\/([0-9a-f-]{36})\/playback$/i);
-  if (match && request.method === "GET") return playback(request, env, match[1]);
+  const playbackMatch = url.pathname.match(
+    /^\/api\/classes\/([0-9a-f-]{36})\/playback$/i
+  );
+
+  if (playbackMatch) {
+    if (request.method !== "GET") {
+      return json({ error: "Method not allowed." }, 405);
+    }
+    return playback(request, env, playbackMatch[1]);
+  }
 
   return json({ error: "Not found." }, 404);
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) return handleApi(request, env);
-    return env.ASSETS.fetch(request);
+    try {
+      const url = new URL(request.url);
+      const response = url.pathname.startsWith("/api/")
+        ? await handleApi(request, env)
+        : await env.ASSETS.fetch(request);
+
+      return secureResponse(response, request, env);
+    } catch {
+      securityEvent(request, "unhandled-exception", "failed");
+      return secureResponse(
+        json({ error: "No pudimos procesar la solicitud." }, 500),
+        request,
+        env
+      );
+    }
   }
 } satisfies ExportedHandler<Env>;

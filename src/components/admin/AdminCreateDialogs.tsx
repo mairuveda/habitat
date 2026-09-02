@@ -25,7 +25,7 @@ export function NewStudentDialog({
 }: StudentDialogProps) {
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
 
-  async function submitStudent(event: React.FormEvent<HTMLFormElement>) {
+  async function submitStudent(event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) {
     event.preventDefault();
     onStatus("");
     setTemporaryPassword(null);
@@ -101,7 +101,7 @@ export function NewStudentDialog({
 }
 
 export function NewGroupDialog({ onClose, onCreated, onStatus }: CommonProps) {
-  async function submitGroup(event: React.FormEvent<HTMLFormElement>) {
+  async function submitGroup(event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) {
     event.preventDefault();
     onStatus("");
 
@@ -144,7 +144,7 @@ export function NewClassDialog({
   const [uploaded, setUploaded] = useState<UploadResult | null>(null);
   const [saving, setSaving] = useState(false);
 
-  async function submitClass(event: React.FormEvent<HTMLFormElement>) {
+  async function submitClass(event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) {
     event.preventDefault();
     onStatus("");
 

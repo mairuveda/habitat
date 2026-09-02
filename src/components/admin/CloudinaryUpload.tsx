@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { getVideoUploadConfiguration } from "@/lib/browser-config";
+import {
+  getRuntimeConfig,
+  requireCloudinaryConfig
+} from "@/lib/runtime-config";
+import { getSupabase } from "@/lib/supabase";
 
 export type UploadResult = {
   public_id: string;
@@ -14,8 +17,17 @@ export type UploadResult = {
 
 type Props = { onUploaded: (result: UploadResult) => void };
 
-type UploadWidget = { open: () => void; destroy: () => void };
-type UploadWidgetResult = { event: string; info: UploadResult };
+type UploadWidget = {
+  open: () => void;
+  destroy: () => void;
+};
+
+type UploadWidgetResult = {
+  event: string;
+  info: UploadResult;
+};
+
+type CloudinaryConfig = ReturnType<typeof requireCloudinaryConfig>;
 
 declare global {
   interface Window {
@@ -28,95 +40,122 @@ declare global {
   }
 }
 
+function loadCloudinaryWidget(
+  onReady: () => void,
+  onFailed: () => void
+): () => void {
+  const existing = document.querySelector<HTMLScriptElement>(
+    'script[data-habitat-cloudinary="true"]'
+  );
+
+  if (existing) {
+    if (window.cloudinary) {
+      onReady();
+      return () => undefined;
+    }
+
+    existing.addEventListener("load", onReady, { once: true });
+    existing.addEventListener("error", onFailed, { once: true });
+
+    return () => {
+      existing.removeEventListener("load", onReady);
+      existing.removeEventListener("error", onFailed);
+    };
+  }
+
+  const script = document.createElement("script");
+  script.src = "https://upload-widget.cloudinary.com/global/all.js";
+  script.async = true;
+  script.dataset.habitatCloudinary = "true";
+  script.onload = onReady;
+  script.onerror = onFailed;
+  document.body.appendChild(script);
+
+  return () => {
+    script.onload = null;
+    script.onerror = null;
+  };
+}
+
 export default function CloudinaryUpload({ onUploaded }: Props) {
   const [ready, setReady] = useState(false);
+  const [config, setConfig] = useState<CloudinaryConfig | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const widgetRef = useRef<UploadWidget | null>(null);
 
-  const cloudName = import.meta.env.PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const apiKey = import.meta.env.PUBLIC_CLOUDINARY_API_KEY;
-  const uploadPreset = import.meta.env.PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-  const videoUploadConfig = getVideoUploadConfiguration({ cloudName, apiKey, uploadPreset });
-  const configurationError = videoUploadConfig.configured
-    ? null
-    : `Falta configuración pública de Cloudinary: ${videoUploadConfig.missing.join(", ")}.`;
-
   useEffect(() => {
-    if (configurationError) {
-      setMessage(configurationError);
-      return;
+    let cancelled = false;
+    let cleanupScript: () => void = () => {};
+
+    async function prepare() {
+      try {
+        const runtime = await getRuntimeConfig();
+        const cloudinaryConfig = requireCloudinaryConfig(runtime);
+
+        if (cancelled) return;
+        setConfig(cloudinaryConfig);
+
+        cleanupScript = loadCloudinaryWidget(
+          () => {
+            if (cancelled) return;
+
+            if (window.cloudinary) {
+              setReady(true);
+              setMessage(null);
+            } else {
+              setReady(false);
+              setMessage("No pudimos iniciar el selector de videos.");
+            }
+          },
+          () => {
+            if (cancelled) return;
+            setReady(false);
+            setMessage("No pudimos cargar el selector de videos.");
+          }
+        );
+      } catch {
+        if (!cancelled) {
+          setReady(false);
+          setConfig(null);
+          setMessage("La carga de videos no está configurada.");
+        }
+      }
     }
 
-    const markReady = () => {
-      if (window.cloudinary) {
-        setReady(true);
-        setMessage(null);
-      } else {
-        setReady(false);
-        setMessage("No pudimos iniciar el selector de videos.");
-      }
-    };
-
-    const markFailed = () => {
-      setReady(false);
-      setMessage("No pudimos cargar el selector de videos. Revisá la conexión o bloqueadores del navegador.");
-    };
-
-    const existing = document.querySelector<HTMLScriptElement>('script[data-habitat-cloudinary="true"]');
-    if (existing) {
-      if (window.cloudinary) markReady();
-      else {
-        existing.addEventListener("load", markReady, { once: true });
-        existing.addEventListener("error", markFailed, { once: true });
-      }
-
-      return () => {
-        existing.removeEventListener("load", markReady);
-        existing.removeEventListener("error", markFailed);
-        widgetRef.current?.destroy();
-      };
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://upload-widget.cloudinary.com/global/all.js";
-    script.async = true;
-    script.dataset.habitatCloudinary = "true";
-    script.onload = markReady;
-    script.onerror = markFailed;
-    document.body.appendChild(script);
+    void prepare();
 
     return () => {
+      cancelled = true;
+      cleanupScript();
       widgetRef.current?.destroy();
     };
-  }, [configurationError]);
+  }, []);
 
   async function getToken(): Promise<string> {
-    if (!supabase) throw new Error("El servicio de autenticación no está disponible.");
+    const supabase = await getSupabase();
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
+
     if (!token) {
       window.location.replace("/alumnos?reason=expired");
       throw new Error("Tu sesión terminó. Volvé a iniciar sesión.");
     }
+
     return token;
   }
 
   async function openWidget() {
     setMessage(null);
 
-    if (configurationError) {
-      setMessage(configurationError);
-      return;
-    }
-
-    if (!ready || !window.cloudinary || !cloudName || !apiKey || !uploadPreset) {
-      setMessage("El selector de videos todavía se está preparando. Intentá nuevamente en unos segundos.");
+    if (!ready || !window.cloudinary || !config) {
+      setMessage("El selector de videos todavía se está preparando.");
       return;
     }
 
     try {
       if (!widgetRef.current) {
+        const { cloudName, apiKey, uploadPreset } = config;
+
         widgetRef.current = window.cloudinary.createUploadWidget({
           cloudName,
           apiKey,
@@ -135,6 +174,7 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
           ) => {
             try {
               const token = await getToken();
+
               const response = await fetch("/api/cloudinary/sign", {
                 method: "POST",
                 headers: {
@@ -143,7 +183,11 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
                 },
                 body: JSON.stringify({ paramsToSign })
               });
-              const payload = await response.json().catch(() => ({})) as { signature?: string; error?: string };
+
+              const payload = await response.json().catch(() => ({})) as {
+                signature?: string;
+                error?: string;
+              };
 
               if (response.status === 401) {
                 window.location.replace("/alumnos?reason=expired");
@@ -153,14 +197,18 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
               if (!response.ok || !payload.signature) {
                 throw new Error(
                   response.status === 503
-                    ? "La firma de videos no está configurada en Cloudflare."
+                    ? "La carga de videos no está disponible."
                     : payload.error ?? "No se pudo autorizar la carga."
                 );
               }
 
               callback(payload.signature);
             } catch (error) {
-              setMessage(error instanceof Error ? error.message : "No se pudo autorizar la carga.");
+              setMessage(
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo autorizar la carga."
+              );
               throw error;
             }
           }
@@ -169,16 +217,25 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
             setMessage("La carga no pudo completarse.");
             return;
           }
+
           if (result.event !== "success") return;
 
           const inferredType: UploadResult["type"] = result.info.type
-            ?? (result.info.secure_url.includes("/video/authenticated/") ? "authenticated"
-              : result.info.secure_url.includes("/video/private/") ? "private"
+            ?? (result.info.secure_url.includes("/video/authenticated/")
+              ? "authenticated"
+              : result.info.secure_url.includes("/video/private/")
+                ? "private"
                 : "upload");
-          const normalized = { ...result.info, type: inferredType };
+
+          const normalized = {
+            ...result.info,
+            type: inferredType
+          };
 
           if (inferredType !== "authenticated") {
-            setMessage("El video se cargó, pero no quedó privado. Revisá que el preset de Cloudinary use delivery type 'authenticated'.");
+            setMessage(
+              "El video se cargó, pero no quedó privado. No será posible publicarlo."
+            );
             onUploaded(normalized);
             return;
           }
@@ -190,11 +247,13 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
 
       widgetRef.current.open();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No pudimos abrir el selector de videos.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No pudimos abrir el selector de videos."
+      );
     }
   }
-
-  const disabled = Boolean(configurationError) || !ready;
 
   return (
     <div className="upload-box">
@@ -202,14 +261,15 @@ export default function CloudinaryUpload({ onUploaded }: Props) {
         type="button"
         className="upload-target"
         onClick={() => void openWidget()}
-        disabled={disabled}
-        aria-busy={!ready && !configurationError}
+        disabled={!ready || !config}
+        aria-busy={!ready}
       >
         <span className="upload-icon">↑</span>
-        <strong>{configurationError ? "Video no configurado" : ready ? "Subir video" : "Preparando carga…"}</strong>
+        <strong>{ready ? "Subir video" : "Preparando carga…"}</strong>
         <span>Equipo o Google Drive</span>
-        <small>MP4 · demo Free: hasta 100 MB</small>
+        <small>MP4 · hasta 100 MB</small>
       </button>
+
       {message && <p className="upload-message" role="status">{message}</p>}
     </div>
   );

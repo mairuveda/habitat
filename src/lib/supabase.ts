@@ -1,21 +1,29 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getRuntimeConfig, requireSupabaseConfig } from "./runtime-config";
 
-const url = import.meta.env.PUBLIC_SUPABASE_URL;
-const publishableKey =
-  import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+let clientPromise: Promise<SupabaseClient> | null = null;
 
-export const isSupabaseConfigured = Boolean(url && publishableKey);
+export async function getSupabase(): Promise<SupabaseClient> {
+  if (!clientPromise) {
+    clientPromise = getRuntimeConfig()
+      .then((config) => {
+        const { url, publishableKey } = requireSupabaseConfig(config);
+        const storage = typeof window !== "undefined" ? window.sessionStorage : undefined;
 
-const storage = typeof window !== "undefined" ? window.sessionStorage : undefined;
+        return createClient(url, publishableKey, {
+          auth: {
+            persistSession: Boolean(storage),
+            storage,
+            autoRefreshToken: Boolean(storage),
+            detectSessionInUrl: Boolean(storage)
+          }
+        });
+      })
+      .catch((error) => {
+        clientPromise = null;
+        throw error;
+      });
+  }
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(url!, publishableKey!, {
-      auth: {
-        persistSession: Boolean(storage),
-        storage,
-        autoRefreshToken: Boolean(storage),
-        detectSessionInUrl: Boolean(storage)
-      }
-    })
-  : null;
+  return clientPromise;
+}

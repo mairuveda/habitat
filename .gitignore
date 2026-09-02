@@ -6,3 +6,6 @@ dist/
 !.env.example
 .wrangler/
 .DS_Store
+*.mp4
+*.mov
+*.webm

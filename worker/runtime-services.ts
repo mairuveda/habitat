@@ -1,20 +1,25 @@
 export interface RuntimeEnv {
   SUPABASE_URL?: string;
-  PUBLIC_SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
-  PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
-  SUPABASE_ANON_KEY?: string;
-  PUBLIC_SUPABASE_ANON_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
+
   CLOUDINARY_CLOUD_NAME?: string;
-  PUBLIC_CLOUDINARY_CLOUD_NAME?: string;
   CLOUDINARY_API_KEY?: string;
-  PUBLIC_CLOUDINARY_API_KEY?: string;
-  CLOUDINARY_API_SECRET?: string;
   CLOUDINARY_UPLOAD_PRESET?: string;
-  PUBLIC_CLOUDINARY_UPLOAD_PRESET?: string;
+  CLOUDINARY_API_SECRET?: string;
 }
+
+export type PublicRuntimeConfig = {
+  supabase: {
+    url: string | null;
+    publishableKey: string | null;
+  };
+  cloudinary: {
+    cloudName: string | null;
+    apiKey: string | null;
+    uploadPreset: string | null;
+  };
+};
 
 export type RuntimeServices = {
   auth: boolean;
@@ -30,66 +35,89 @@ export type RuntimeReadiness = {
   missing: string[];
 };
 
+function clean(value: string | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
 export function getSupabaseUrl(env: RuntimeEnv): string | null {
-  return env.SUPABASE_URL ?? env.PUBLIC_SUPABASE_URL ?? null;
+  return clean(env.SUPABASE_URL);
 }
 
 export function getPublishableKey(env: RuntimeEnv): string | null {
-  return env.SUPABASE_PUBLISHABLE_KEY
-    ?? env.PUBLIC_SUPABASE_PUBLISHABLE_KEY
-    ?? env.SUPABASE_ANON_KEY
-    ?? env.PUBLIC_SUPABASE_ANON_KEY
-    ?? null;
+  return clean(env.SUPABASE_PUBLISHABLE_KEY);
 }
 
 export function getAdminKey(env: RuntimeEnv): string | null {
-  return env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? null;
+  return clean(env.SUPABASE_SECRET_KEY);
 }
 
 export function getCloudName(env: RuntimeEnv): string | null {
-  return env.CLOUDINARY_CLOUD_NAME ?? env.PUBLIC_CLOUDINARY_CLOUD_NAME ?? null;
+  return clean(env.CLOUDINARY_CLOUD_NAME);
 }
 
 export function getCloudinaryApiKey(env: RuntimeEnv): string | null {
-  return env.CLOUDINARY_API_KEY ?? env.PUBLIC_CLOUDINARY_API_KEY ?? null;
+  return clean(env.CLOUDINARY_API_KEY);
 }
 
 export function getCloudinaryPreset(env: RuntimeEnv): string | null {
-  return env.CLOUDINARY_UPLOAD_PRESET ?? env.PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? null;
+  return clean(env.CLOUDINARY_UPLOAD_PRESET);
+}
+
+export function publicRuntimeConfig(env: RuntimeEnv): PublicRuntimeConfig {
+  return {
+    supabase: {
+      url: getSupabaseUrl(env),
+      publishableKey: getPublishableKey(env)
+    },
+    cloudinary: {
+      cloudName: getCloudName(env),
+      apiKey: getCloudinaryApiKey(env),
+      uploadPreset: getCloudinaryPreset(env)
+    }
+  };
 }
 
 export function runtimeReadiness(env: RuntimeEnv): RuntimeReadiness {
-  const supabaseUrl = getSupabaseUrl(env);
-  const publishableKey = getPublishableKey(env);
+  const config = publicRuntimeConfig(env);
   const adminKey = getAdminKey(env);
-  const cloudName = getCloudName(env);
-  const cloudinaryApiKey = getCloudinaryApiKey(env);
-  const cloudinaryPreset = getCloudinaryPreset(env);
-  const cloudinarySecret = env.CLOUDINARY_API_SECRET ?? null;
+  const cloudinarySecret = clean(env.CLOUDINARY_API_SECRET);
 
   const missing: string[] = [];
-  if (!supabaseUrl) missing.push("SUPABASE_URL");
-  if (!publishableKey) missing.push("SUPABASE_PUBLISHABLE_KEY");
-  if (!adminKey) missing.push("SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY");
-  if (!cloudName) missing.push("CLOUDINARY_CLOUD_NAME");
-  if (!cloudinaryApiKey) missing.push("CLOUDINARY_API_KEY");
-  if (!cloudinaryPreset) missing.push("CLOUDINARY_UPLOAD_PRESET");
+
+  if (!config.supabase.url) missing.push("SUPABASE_URL");
+  if (!config.supabase.publishableKey) missing.push("SUPABASE_PUBLISHABLE_KEY");
+  if (!adminKey) missing.push("SUPABASE_SECRET_KEY");
+  if (!config.cloudinary.cloudName) missing.push("CLOUDINARY_CLOUD_NAME");
+  if (!config.cloudinary.apiKey) missing.push("CLOUDINARY_API_KEY");
+  if (!config.cloudinary.uploadPreset) missing.push("CLOUDINARY_UPLOAD_PRESET");
   if (!cloudinarySecret) missing.push("CLOUDINARY_API_SECRET");
 
-  const auth = Boolean(supabaseUrl && publishableKey);
+  const auth = Boolean(
+    config.supabase.url
+    && config.supabase.publishableKey
+  );
+
   const admin = Boolean(auth && adminKey);
-  const videoPlayback = Boolean(auth && cloudName && cloudinarySecret);
-  const videoUpload = Boolean(
-    admin
-    && cloudName
-    && cloudinaryApiKey
-    && cloudinaryPreset
+
+  const videoPlayback = Boolean(
+    auth
+    && config.cloudinary.cloudName
     && cloudinarySecret
   );
+
+  const videoUpload = Boolean(
+    admin
+    && config.cloudinary.cloudName
+    && config.cloudinary.apiKey
+    && config.cloudinary.uploadPreset
+    && cloudinarySecret
+  );
+
   const videoDelete = Boolean(
     admin
-    && cloudName
-    && cloudinaryApiKey
+    && config.cloudinary.cloudName
+    && config.cloudinary.apiKey
     && cloudinarySecret
   );
 
@@ -106,8 +134,4 @@ export function runtimeReadiness(env: RuntimeEnv): RuntimeReadiness {
     services,
     missing
   };
-}
-
-export function runtimeServices(env: RuntimeEnv): RuntimeServices {
-  return runtimeReadiness(env).services;
 }
